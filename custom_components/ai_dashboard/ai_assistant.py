@@ -353,8 +353,9 @@ class AIAssistant:
             timeout=60,
         ) as resp:
             if resp.status != 200:
+                provider_label = self.provider.capitalize() if self.provider else "AI"
                 raise ValueError(
-                    f"OpenAI Fehler {resp.status}: {(await resp.text())[:200]}"
+                    f"{provider_label} Fehler {resp.status}: {(await resp.text())[:200]}"
                 )
             data = await resp.json()
 

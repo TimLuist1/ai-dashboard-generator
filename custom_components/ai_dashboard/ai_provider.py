@@ -638,7 +638,21 @@ class OpenCodeProvider(OpenAIProvider):
                 },
                 timeout=10,
             ) as resp:
-                return resp.status == 200
+                if resp.status == 200:
+                    return True
+
+                # OpenCode can return a temporary upstream capacity error although
+                # authentication is valid. Don't block setup in that specific case.
+                if resp.status in (500, 502, 503, 504):
+                    error_text = await resp.text()
+                    if "No available accounts" in error_text:
+                        _LOGGER.warning(
+                            "OpenCode temporary upstream capacity issue during key validation: %s",
+                            error_text[:200],
+                        )
+                        return True
+
+                return False
         except Exception:  # pylint: disable=broad-except
             return False
 
