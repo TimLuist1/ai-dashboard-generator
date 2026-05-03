@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from homeassistant.helpers.typing import ConfigType
 
 from .const import (  # noqa: E402
+    CONF_BASE_URL,
     DOMAIN,
     PLATFORMS,
     PANEL_COMPONENT_NAME,
@@ -535,19 +536,21 @@ def _register_websocket_handlers(hass: HomeAssistant) -> None:
         provider = _get_entry_value(entry, "ai_provider", "groq")
         api_key = _get_entry_value(entry, "api_key", "")
         model = _get_entry_value(entry, "ai_model", "")
+        base_url = _get_entry_value(entry, "base_url", "")
         language = entry.options.get("language") or entry.data.get("language", "de")
 
         # Retrieve or create a persistent assistant per config entry
         entry_data = hass.data[DOMAIN].get(entry.entry_id, {})
         assistant: AIAssistant | None = entry_data.get("assistant")
         if assistant is None:
-            assistant = AIAssistant(hass, provider, api_key, model, language)
+            assistant = AIAssistant(hass, provider, api_key, model, base_url, language)
             entry_data["assistant"] = assistant
 
         # Sync provider settings in case they changed
         assistant.provider = provider
         assistant.api_key = api_key
         assistant.model = model
+        assistant.base_url = base_url
         assistant.language = language
 
         try:

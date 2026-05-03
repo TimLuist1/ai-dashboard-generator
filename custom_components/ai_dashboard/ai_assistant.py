@@ -3,8 +3,8 @@
 The assistant receives the full HA context and can call any registered tool
 (call_service, create_automation, rename_entity, …) via provider tool-calling APIs.
 
-Supported providers: OpenAI (function calling), Anthropic (tool use), Google Gemini
-(function declarations), and a limited offline/rule-based fallback.
+Supported providers: OpenAI (function calling), Anthropic (tool use), Google Gemini,
+Groq, and OpenCode.ai (OpenAI-compatible endpoints).
 
 Conversation flow
 ─────────────────
@@ -56,12 +56,14 @@ class AIAssistant:
         provider: str,
         api_key: str,
         model: str,
+        base_url: str = "",
         language: str = "de",
     ) -> None:
         self.hass = hass
         self.provider = provider
         self.api_key = api_key
         self.model = model
+        self.base_url = base_url
         self.language = language
         self._context_builder: HAContextBuilder | None = None
         self._tool_executor: HAToolExecutor | None = None
@@ -289,6 +291,7 @@ class AIAssistant:
 
     async def _call_openai(self, system_prompt: str, messages: list[dict]) -> dict:
         from homeassistant.helpers.aiohttp_client import async_get_clientsession
+        from .const import AI_PROVIDER_GROQ, AI_PROVIDER_OPENCODE, OPENCODE_DEFAULT_BASE_URL
         from .ha_tools import TOOL_DEFINITIONS
 
         session = async_get_clientsession(self.hass)
@@ -326,8 +329,15 @@ class AIAssistant:
                         }
                     )
 
+        api_url = "https://api.openai.com/v1/chat/completions"
+        if self.provider == AI_PROVIDER_GROQ:
+            api_url = "https://api.groq.com/openai/v1/chat/completions"
+        elif self.provider == AI_PROVIDER_OPENCODE:
+            base = (self.base_url or OPENCODE_DEFAULT_BASE_URL).rstrip("/")
+            api_url = f"{base}/chat/completions"
+
         async with session.post(
-            "https://api.openai.com/v1/chat/completions",
+            api_url,
             headers={
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json",

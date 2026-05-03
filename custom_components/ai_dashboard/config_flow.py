@@ -236,14 +236,24 @@ class AIDashboardOptionsFlow(config_entries.OptionsFlow):
             entry.options.get(CONF_API_KEY)
             or entry.data.get(CONF_API_KEY, "")
         )
+        is_opencode = provider == AI_PROVIDER_OPENCODE
+        current_base_url = (
+            entry.options.get(CONF_BASE_URL)
+            or entry.data.get(CONF_BASE_URL)
+            or OPENCODE_DEFAULT_BASE_URL
+        )
 
         if user_input is not None:
             raw_key = user_input.get(CONF_API_KEY, "").strip()
             api_key = raw_key if raw_key else current_key
             model = user_input.get(CONF_AI_MODEL, default_model)
+            base_url = user_input.get(CONF_BASE_URL, current_base_url).strip()
 
             if api_key:
-                valid = await _async_validate_api_key(self.hass, provider, api_key, model)
+                validate_base_url = base_url if is_opencode else ""
+                valid = await _async_validate_api_key(
+                    self.hass, provider, api_key, model, validate_base_url
+                )
                 if not valid:
                     errors["base"] = "invalid_api_key"
             else:
@@ -266,6 +276,8 @@ class AIDashboardOptionsFlow(config_entries.OptionsFlow):
                         CONF_LANGUAGE, entry.options.get(CONF_LANGUAGE, "de")
                     ),
                 }
+                if is_opencode:
+                    new_options[CONF_BASE_URL] = base_url or OPENCODE_DEFAULT_BASE_URL
                 self.hass.config_entries.async_update_entry(
                     entry,
                     data={
@@ -274,16 +286,23 @@ class AIDashboardOptionsFlow(config_entries.OptionsFlow):
                         CONF_API_KEY: api_key,
                         CONF_AI_MODEL: model,
                         CONF_DASHBOARD_TITLE: new_title,
+                        CONF_BASE_URL: (
+                            base_url or OPENCODE_DEFAULT_BASE_URL
+                            if is_opencode
+                            else entry.data.get(CONF_BASE_URL, "")
+                        ),
                     },
                 )
                 return self.async_create_entry(title="", data=new_options)
 
-        schema = vol.Schema(
-            {
-                vol.Optional(CONF_API_KEY, default=""): str,
-                vol.Required(CONF_AI_MODEL, default=default_model): vol.In(model_choices),
-            }
-        )
+        schema_fields: dict[vol.Marker, Any] = {
+            vol.Optional(CONF_API_KEY, default=""): str,
+            vol.Required(CONF_AI_MODEL, default=default_model): vol.In(model_choices),
+        }
+        if is_opencode:
+            schema_fields[vol.Optional(CONF_BASE_URL, default=current_base_url)] = str
+
+        schema = vol.Schema(schema_fields)
 
         return self.async_show_form(
             step_id="model",
