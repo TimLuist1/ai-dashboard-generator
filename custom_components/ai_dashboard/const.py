@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 DOMAIN = "ai_dashboard"
-VERSION = "2.3.0"
+VERSION = "2.3.1"
 
 PLATFORMS: list[str] = []
 
@@ -23,7 +23,6 @@ CONF_BASE_URL = "base_url"
 OPENCODE_DEFAULT_BASE_URL = "https://aiprimetech.io/v1"
 
 # AI Provider options
-AI_PROVIDER_OFFLINE = "offline"
 AI_PROVIDER_OPENAI = "openai"
 AI_PROVIDER_ANTHROPIC = "anthropic"
 AI_PROVIDER_GOOGLE = "google"

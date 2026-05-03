@@ -1154,10 +1154,10 @@ class DashboardGenerator:
 
     async def _async_get_ai_enrichment(self, areas_data: list[dict[str, Any]]) -> dict[str, Any]:
         """Get AI enrichment for entities."""
-        from .const import AI_PROVIDER_OFFLINE, AI_PROVIDER_OPENCODE
+        from .const import AI_PROVIDER_GROQ, AI_PROVIDER_OPENCODE
         from .ai_provider import create_ai_provider
 
-        provider_name = self._cfg.get("ai_provider", AI_PROVIDER_OFFLINE)
+        provider_name = self._cfg.get("ai_provider", AI_PROVIDER_GROQ)
         api_key = self._cfg.get("api_key", "")
         model = self._cfg.get("ai_model", "")
         base_url = self._cfg.get("base_url", "") if provider_name == AI_PROVIDER_OPENCODE else ""

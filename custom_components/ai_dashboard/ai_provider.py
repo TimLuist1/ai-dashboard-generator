@@ -69,113 +69,6 @@ class AIProvider(ABC):
         """
 
 
-class OfflineAIProvider(AIProvider):
-    """Rule-based offline AI provider - no API key required."""
-
-    async def async_test_connection(self) -> bool:
-        """Always available offline."""
-        return True
-
-    async def async_analyze_entities(
-        self, areas_data: list[dict[str, Any]], language: str = "de"
-    ) -> dict[str, Any]:
-        """Analyze entities using rule-based approach."""
-        _ = language  # kept for interface compatibility
-        result = {}
-        for area in areas_data:
-            area_id = area["area_id"]
-            result[area_id] = {
-                "icon": area.get("icon"),
-                "color": self._get_area_color(area["name"]),
-                "entities": {},
-            }
-            for entity in area.get("entities", []):
-                result[area_id]["entities"][entity["entity_id"]] = {
-                    "friendly_name": entity.get("suggested_name") or entity.get("friendly_name"),
-                    "icon": entity.get("suggested_icon") or entity.get("icon"),
-                    "visible": True,
-                }
-        return result
-
-    async def async_generate_dashboard_hints(
-        self, areas_data: list[dict[str, Any]], language: str = "de"
-    ) -> dict[str, Any]:
-        """Return basic hints without AI."""
-        return {
-            "overview_subtitle": "Mein Zuhause" if language == "de" else "My Home",
-            "areas": {
-                area["area_id"]: {
-                    "subtitle": self._get_area_subtitle(area, language)
-                }
-                for area in areas_data
-            },
-        }
-
-    def _get_area_color(self, area_name: str) -> str:
-        """Return a color for an area based on its name."""
-        name_lower = area_name.lower()
-        color_map = {
-            "wohnzimmer": "orange",
-            "living": "orange",
-            "salon": "orange",
-            "schlafzimmer": "indigo",
-            "bedroom": "indigo",
-            "küche": "green",
-            "kitchen": "green",
-            "bad": "blue",
-            "bathroom": "blue",
-            "büro": "teal",
-            "office": "teal",
-            "keller": "grey",
-            "basement": "grey",
-            "garten": "green",
-            "garden": "green",
-            "garage": "brown",
-            "kinderzimmer": "pink",
-            "kids": "pink",
-            "children": "pink",
-            "esszimmer": "amber",
-            "dining": "amber",
-            "flur": "cyan",
-            "hallway": "cyan",
-            "corridor": "cyan",
-        }
-        for key, color in color_map.items():
-            if key in name_lower:
-                return color
-        return "blue-grey"
-
-    async def async_generate_dashboard_design(
-        self, areas_data: list[dict[str, Any]], language: str = "de"
-    ) -> dict[str, Any]:
-        """Offline provider has no AI design capability."""
-        _ = language  # kept for interface compatibility
-        return {}
-
-    def _get_area_subtitle(self, area: dict[str, Any], language: str) -> str:
-        """Generate a subtitle for an area."""
-        counts = area.get("entity_counts", {})
-        parts = []
-        if counts.get("light", 0) > 0:
-            n = counts["light"]
-            if language == "de":
-                parts.append(f"{n} {'Licht' if n == 1 else 'Lichter'}")
-            else:
-                parts.append(f"{n} {'light' if n == 1 else 'lights'}")
-        if counts.get("climate", 0) > 0:
-            if language == "de":
-                parts.append("Heizung")
-            else:
-                parts.append("Heating")
-        if counts.get("sensor", 0) > 0:
-            n = counts["sensor"]
-            if language == "de":
-                parts.append(f"{n} {'Sensor' if n == 1 else 'Sensoren'}")
-            else:
-                parts.append(f"{n} {'sensor' if n == 1 else 'sensors'}")
-        return " · ".join(parts) if parts else ""
-
-
 class OpenAIProvider(AIProvider):
     """OpenAI GPT provider."""
 
@@ -218,9 +111,8 @@ class OpenAIProvider(AIProvider):
             response_text = await self._async_call_api(prompt)
             return self._parse_json_response(response_text)
         except Exception as err:  # pylint: disable=broad-except
-            _LOGGER.warning("OpenAI analysis failed, using offline fallback: %s", err)
-            offline = OfflineAIProvider()
-            return await offline.async_analyze_entities(areas_data, language)
+            _LOGGER.warning("OpenAI analysis failed: %s", err)
+            return {}
 
     async def async_generate_dashboard_hints(
         self, areas_data: list[dict[str, Any]], language: str = "de"
@@ -232,9 +124,8 @@ class OpenAIProvider(AIProvider):
             response_text = await self._async_call_api(prompt)
             return self._parse_json_response(response_text)
         except Exception as err:  # pylint: disable=broad-except
-            _LOGGER.warning("OpenAI hints failed, using offline fallback: %s", err)
-            offline = OfflineAIProvider()
-            return await offline.async_generate_dashboard_hints(areas_data, language)
+            _LOGGER.warning("OpenAI hints failed: %s", err)
+            return {}
 
     async def async_generate_dashboard_design(
         self, areas_data: list[dict[str, Any]], language: str = "de"
@@ -511,9 +402,8 @@ class AnthropicProvider(AIProvider):
             response_text = await self._async_call_api(prompt)
             return openai_provider._parse_json_response(response_text)
         except Exception as err:  # pylint: disable=broad-except
-            _LOGGER.warning("Anthropic analysis failed, using offline fallback: %s", err)
-            offline = OfflineAIProvider()
-            return await offline.async_analyze_entities(areas_data, language)
+            _LOGGER.warning("Anthropic analysis failed: %s", err)
+            return {}
 
     async def async_generate_dashboard_hints(
         self, areas_data: list[dict[str, Any]], language: str = "de"
@@ -526,9 +416,8 @@ class AnthropicProvider(AIProvider):
             response_text = await self._async_call_api(prompt)
             return openai_provider._parse_json_response(response_text)
         except Exception as err:  # pylint: disable=broad-except
-            _LOGGER.warning("Anthropic hints failed, using offline fallback: %s", err)
-            offline = OfflineAIProvider()
-            return await offline.async_generate_dashboard_hints(areas_data, language)
+            _LOGGER.warning("Anthropic hints failed: %s", err)
+            return {}
 
     async def async_generate_dashboard_design(
         self, areas_data: list[dict[str, Any]], language: str = "de"
@@ -607,9 +496,8 @@ class GoogleAIProvider(AIProvider):
             response_text = await self._async_call_api(prompt)
             return openai_provider._parse_json_response(response_text)
         except Exception as err:  # pylint: disable=broad-except
-            _LOGGER.warning("Google AI analysis failed, using offline fallback: %s", err)
-            offline = OfflineAIProvider()
-            return await offline.async_analyze_entities(areas_data, language)
+            _LOGGER.warning("Google AI analysis failed: %s", err)
+            return {}
 
     async def async_generate_dashboard_hints(
         self, areas_data: list[dict[str, Any]], language: str = "de"
@@ -622,9 +510,8 @@ class GoogleAIProvider(AIProvider):
             response_text = await self._async_call_api(prompt)
             return openai_provider._parse_json_response(response_text)
         except Exception as err:  # pylint: disable=broad-except
-            _LOGGER.warning("Google AI hints failed, using offline fallback: %s", err)
-            offline = OfflineAIProvider()
-            return await offline.async_generate_dashboard_hints(areas_data, language)
+            _LOGGER.warning("Google AI hints failed: %s", err)
+            return {}
 
     async def async_generate_dashboard_design(
         self, areas_data: list[dict[str, Any]], language: str = "de"
@@ -765,7 +652,6 @@ def create_ai_provider(
 ) -> AIProvider:
     """Factory function to create the appropriate AI provider."""
     from .const import (
-        AI_PROVIDER_OFFLINE,
         AI_PROVIDER_OPENAI,
         AI_PROVIDER_ANTHROPIC,
         AI_PROVIDER_GOOGLE,
@@ -784,4 +670,4 @@ def create_ai_provider(
     elif provider == AI_PROVIDER_OPENCODE:
         return OpenCodeProvider(hass, api_key, model, base_url)
     else:
-        return OfflineAIProvider()
+        return GroqProvider(hass, api_key, model)

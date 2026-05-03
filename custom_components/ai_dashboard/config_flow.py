@@ -19,7 +19,6 @@ from .const import (
     CONF_USE_MUSHROOM,
     CONF_LANGUAGE,
     CONF_BASE_URL,
-    AI_PROVIDER_OFFLINE,
     AI_PROVIDER_OPENAI,
     AI_PROVIDER_ANTHROPIC,
     AI_PROVIDER_GOOGLE,
@@ -101,7 +100,7 @@ class AIDashboardConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> config_entries.ConfigFlowResult:
         """Step for entering the API key."""
         errors: dict[str, str] = {}
-        provider = self._data.get(CONF_AI_PROVIDER, AI_PROVIDER_OFFLINE)
+        provider = self._data.get(CONF_AI_PROVIDER, AI_PROVIDER_GROQ)
         model_choices = _model_choices(provider)
         default_model = _default_model(provider)
         is_opencode = provider == AI_PROVIDER_OPENCODE

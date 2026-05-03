@@ -989,25 +989,9 @@ class AIDashboardPanel extends LitElement {
   }
 
   _renderAssistantTab() {
-    const isOffline = (this._settings.ai_provider || "offline") === "offline";
-    const provider = this._settings.ai_provider || "offline";
+    const provider = this._settings.ai_provider || "groq";
 
     return html`
-      <!-- Provider warning -->
-      ${isOffline
-        ? html`
-            <div class="message error">
-              <ha-icon icon="mdi:alert"></ha-icon>
-              <span>
-                Im Offline-Modus ist der KI-Assistent nicht verfügbar.
-                Bitte konfiguriere einen API-Schlüssel unter
-                <button class="link-btn" @click=${() => (this._activeTab = "settings")}>Einstellungen</button>.
-              </span>
-            </div>
-          `
-        : nothing}
-
-      <!-- Chat window -->
       <div class="chat-container card">
         <!-- Chat header -->
         <div class="chat-header">
@@ -1166,11 +1150,9 @@ class AIDashboardPanel extends LitElement {
         <div class="chat-input-area">
           <textarea
             class="chat-input"
-            placeholder=${isOffline
-              ? "KI-Assistent benötigt einen API-Schlüssel..."
-              : "Frage stellen oder Befehl eingeben... (Enter = Senden, Shift+Enter = Neue Zeile)"}
+            placeholder="Frage stellen oder Befehl eingeben... (Enter = Senden, Shift+Enter = Neue Zeile)"
             .value=${this._chatInput}
-            ?disabled=${this._chatLoading || isOffline}
+            ?disabled=${this._chatLoading}
             @input=${(e) => (this._chatInput = e.target.value)}
             @keydown=${(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
@@ -1183,7 +1165,7 @@ class AIDashboardPanel extends LitElement {
           <button
             class="chat-send-btn"
             @click=${this._handleChatSend}
-            ?disabled=${this._chatLoading || isOffline || !this._chatInput.trim()}
+            ?disabled=${this._chatLoading || !this._chatInput.trim()}
             title="Nachricht senden"
           >
             ${this._chatLoading
@@ -1221,7 +1203,6 @@ class AIDashboardPanel extends LitElement {
       openai: "OpenAI GPT",
       anthropic: "Anthropic Claude",
       google: "Google Gemini",
-      offline: "Offline",
     };
     return map[this._settings?.ai_provider] || "KI";
   }
@@ -1269,7 +1250,6 @@ class AIDashboardPanel extends LitElement {
               @change=${(e) => {
                 this._settings = { ...this._settings, ai_provider: e.target.value };
               }}>
-              <option value="offline">🧮 Offline / Regelbasiert (Kein API-Key nötig)</option>
               <option value="openai">🤖 OpenAI (GPT-5.5 / GPT-5.4-mini)</option>
               <option value="anthropic">🧠 Anthropic (Claude Opus 4.7 / Sonnet 4.6)</option>
               <option value="google">✨ Google (Gemini 2.5 Flash / Pro)</option>
@@ -1277,58 +1257,54 @@ class AIDashboardPanel extends LitElement {
             </select>
           </div>
 
-          ${currentProvider !== "offline"
-            ? html`
-                <div class="form-group">
-                  <label>API-Schlüssel</label>
-                  <input
-                    type="password"
-                    name="api_key"
-                    class="form-control"
-                    .value=${currentApiKey}
-                    placeholder="sk-... / claude-... / AIza... / gsk_..."
-                    autocomplete="off"
-                  />
-                  <small>Wird verschlüsselt gespeichert. Nie geteilt.</small>
-                  ${currentProvider === "groq" ? html`
-                    <small style="display:block;margin-top:4px">
-                      Groq API-Key kostenlos auf
-                      <a href="https://console.groq.com/keys" target="_blank" rel="noopener">console.groq.com</a>
-                    </small>
-                  ` : nothing}
-                </div>
+          <div class="form-group">
+            <label>API-Schlüssel</label>
+            <input
+              type="password"
+              name="api_key"
+              class="form-control"
+              .value=${currentApiKey}
+              placeholder="sk-... / claude-... / AIza... / gsk_..."
+              autocomplete="off"
+            />
+            <small>Wird verschlüsselt gespeichert. Nie geteilt.</small>
+            ${currentProvider === "groq" ? html`
+              <small style="display:block;margin-top:4px">
+                Groq API-Key kostenlos auf
+                <a href="https://console.groq.com/keys" target="_blank" rel="noopener">console.groq.com</a>
+              </small>
+            ` : nothing}
+          </div>
 
-                <div class="form-group">
-                  <label>Modell</label>
-                  <select name="ai_model" class="form-control" .value=${currentModel}>
-                    ${currentProvider === "openai" ? html`
-                        <option value="gpt-4o-mini">GPT-4o Mini (bewährt, günstig)</option>
-                        <option value="gpt-4o">GPT-4o (bewährt, gut)</option>
-                        <option value="gpt-5.4-mini">GPT-5.4 Mini ✅ (neu, schnell &amp; günstig)</option>
-                        <option value="gpt-5.4">GPT-5.4 (neu, beste Qualität)</option>
-                        <option value="gpt-5.5">GPT-5.5 (neuestes Flaggschiff)</option>
-                      `
-                      : currentProvider === "anthropic" ? html`
-                        <option value="claude-haiku-4-5">Claude Haiku 4.5 (schnell, günstig)</option>
-                        <option value="claude-sonnet-4-6">Claude Sonnet 4.6 ✅ (empfohlen)</option>
-                        <option value="claude-opus-4-7">Claude Opus 4.7 (bestes Modell)</option>
-                      `
-                      : currentProvider === "groq" ? html`
-                        <option value="llama-3.1-8b-instant">Llama 3.1 8B (ultraschnell, kostenlos)</option>
-                        <option value="llama-3.3-70b-versatile">Llama 3.3 70B ✅ (empfohlen, gut &amp; kostenlos)</option>
-                        <option value="meta-llama/llama-4-scout-17b-16e-instruct">Llama 4 Scout 17B (Preview, sehr schnell)</option>
-                        <option value="openai/gpt-oss-20b">GPT OSS 20B (1000 TPS, ultraschnell)</option>
-                        <option value="openai/gpt-oss-120b">GPT OSS 120B (beste OSS-Qualität)</option>
-                      `
-                      : html`
-                        <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash-Lite (schnell &amp; günstig)</option>
-                        <option value="gemini-2.5-flash">Gemini 2.5 Flash ✅ (empfohlen)</option>
-                        <option value="gemini-2.5-pro">Gemini 2.5 Pro (beste Qualität)</option>
-                      `}
-                  </select>
-                </div>
-              `
-            : nothing}
+          <div class="form-group">
+            <label>Modell</label>
+            <select name="ai_model" class="form-control" .value=${currentModel}>
+              ${currentProvider === "openai" ? html`
+                  <option value="gpt-4o-mini">GPT-4o Mini (bewährt, günstig)</option>
+                  <option value="gpt-4o">GPT-4o (bewährt, gut)</option>
+                  <option value="gpt-5.4-mini">GPT-5.4 Mini ✅ (neu, schnell &amp; günstig)</option>
+                  <option value="gpt-5.4">GPT-5.4 (neu, beste Qualität)</option>
+                  <option value="gpt-5.5">GPT-5.5 (neuestes Flaggschiff)</option>
+                `
+                : currentProvider === "anthropic" ? html`
+                  <option value="claude-haiku-4-5">Claude Haiku 4.5 (schnell, günstig)</option>
+                  <option value="claude-sonnet-4-6">Claude Sonnet 4.6 ✅ (empfohlen)</option>
+                  <option value="claude-opus-4-7">Claude Opus 4.7 (bestes Modell)</option>
+                `
+                : currentProvider === "groq" ? html`
+                  <option value="llama-3.1-8b-instant">Llama 3.1 8B (ultraschnell, kostenlos)</option>
+                  <option value="llama-3.3-70b-versatile">Llama 3.3 70B ✅ (empfohlen, gut &amp; kostenlos)</option>
+                  <option value="meta-llama/llama-4-scout-17b-16e-instruct">Llama 4 Scout 17B (Preview, sehr schnell)</option>
+                  <option value="openai/gpt-oss-20b">GPT OSS 20B (1000 TPS, ultraschnell)</option>
+                  <option value="openai/gpt-oss-120b">GPT OSS 120B (beste OSS-Qualität)</option>
+                `
+                : html`
+                  <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash-Lite (schnell &amp; günstig)</option>
+                  <option value="gemini-2.5-flash">Gemini 2.5 Flash ✅ (empfohlen)</option>
+                  <option value="gemini-2.5-pro">Gemini 2.5 Pro (beste Qualität)</option>
+                `}
+            </select>
+          </div>
 
           <hr class="divider" />
 
@@ -1404,7 +1380,6 @@ class AIDashboardPanel extends LitElement {
   _getProviderIcon() {
     const provider = this._settings.ai_provider || "groq";
     const icons = {
-      offline: "mdi:calculator-variant",
       openai: "mdi:robot",
       anthropic: "mdi:brain",
       google: "mdi:google",
@@ -1416,7 +1391,6 @@ class AIDashboardPanel extends LitElement {
   _getProviderName() {
     const provider = this._settings.ai_provider || "groq";
     const names = {
-      offline: "Offline / Regelbasiert",
       openai: `OpenAI ${this._settings.ai_model || "GPT-5.4-mini"}`,
       anthropic: `Anthropic ${this._settings.ai_model || "Claude Sonnet 4.6"}`,
       google: `Google ${this._settings.ai_model || "Gemini 2.5 Flash"}`,
@@ -1428,7 +1402,6 @@ class AIDashboardPanel extends LitElement {
   _getProviderDescription() {
     const provider = this._settings.ai_provider || "groq";
     const descs = {
-      offline: "Verwendet intelligente Regeln ohne externen Dienst. Kein API-Key nötig.",
       openai: "Nutzt OpenAI GPT für intelligente Benennungen und Empfehlungen.",
       anthropic: "Nutzt Anthropic Claude für intelligente Analyse und Design-Vorschläge.",
       google: "Nutzt Google Gemini für schnelle, intelligente Dashboard-Generierung.",

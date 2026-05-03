@@ -532,7 +532,7 @@ def _register_websocket_handlers(hass: HomeAssistant) -> None:
             return
 
         entry = entries[0]
-        provider = _get_entry_value(entry, "ai_provider", "offline")
+        provider = _get_entry_value(entry, "ai_provider", "groq")
         api_key = _get_entry_value(entry, "api_key", "")
         model = _get_entry_value(entry, "ai_model", "")
         language = entry.options.get("language") or entry.data.get("language", "de")

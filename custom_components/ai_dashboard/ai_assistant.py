@@ -269,6 +269,8 @@ class AIAssistant:
             AI_PROVIDER_ANTHROPIC,
             AI_PROVIDER_GOOGLE,
             AI_PROVIDER_OPENAI,
+            AI_PROVIDER_GROQ,
+            AI_PROVIDER_OPENCODE,
         )
 
         if self.provider == AI_PROVIDER_OPENAI:
@@ -277,7 +279,9 @@ class AIAssistant:
             return await self._call_anthropic(system_prompt, messages)
         if self.provider == AI_PROVIDER_GOOGLE:
             return await self._call_google(system_prompt, messages)
-        return await self._offline_response(messages)
+        if self.provider in (AI_PROVIDER_GROQ, AI_PROVIDER_OPENCODE):
+            return await self._call_openai(system_prompt, messages)
+        raise ValueError(f"Unknown AI provider: {self.provider}")
 
     # ─────────────────────────────────────────────────────────────
     # OpenAI
@@ -503,19 +507,6 @@ class AIAssistant:
         if not result["tool_calls"]:
             del result["tool_calls"]
         return result
-
-    # ─────────────────────────────────────────────────────────────
-    # Offline fallback
-    # ─────────────────────────────────────────────────────────────
-
-    async def _offline_response(self, messages: list[dict]) -> dict:
-        return {
-            "content": (
-                "Der KI-Assistent ist im Offline-Modus nicht verfügbar.\n\n"
-                "Bitte konfiguriere einen API-Schlüssel unter **Einstellungen** "
-                "(OpenAI, Anthropic oder Google Gemini), um den Assistenten nutzen zu können."
-            )
-        }
 
     # ─────────────────────────────────────────────────────────────
     # Helpers
