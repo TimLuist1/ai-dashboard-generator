@@ -139,7 +139,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def _async_copy_frontend_files(hass: HomeAssistant) -> None:
-    """Copy frontend JS files to the www directory."""
+    """Copy (always overwrite) frontend JS files to the www directory."""
     www_dir = Path(hass.config.path("www")) / "ai_dashboard"
     www_dir.mkdir(parents=True, exist_ok=True)
 
@@ -148,6 +148,7 @@ async def _async_copy_frontend_files(hass: HomeAssistant) -> None:
     def _copy_files():
         for src_file in frontend_dir.glob("*.js"):
             dst_file = www_dir / src_file.name
+            # Always overwrite so updated versions are deployed immediately
             shutil.copy2(src_file, dst_file)
         _LOGGER.debug("Frontend files copied to %s", www_dir)
 
@@ -156,6 +157,7 @@ async def _async_copy_frontend_files(hass: HomeAssistant) -> None:
 
 async def _async_register_panel(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Register the configuration panel in HA sidebar."""
+    from .const import VERSION as INTEGRATION_VERSION
     frontend.async_register_built_in_panel(
         hass,
         component_name="custom",
@@ -165,7 +167,8 @@ async def _async_register_panel(hass: HomeAssistant, entry: ConfigEntry) -> None
         config={
             "_panel_custom": {
                 "name": PANEL_COMPONENT_NAME,
-                "js_url": f"/local/ai_dashboard/ai-dashboard-panel.js?v={entry.version}",
+                # Use the full integration version string for proper cache-busting
+                "js_url": f"/local/ai_dashboard/ai-dashboard-panel.js?v={INTEGRATION_VERSION}",
                 "embed_iframe": False,
                 "trust_external": False,
             }

@@ -11,13 +11,37 @@
  * - One-click apply
  */
 
-// HA loads custom panel JS as a classic <script> tag, so static `import`
-// is not allowed. Use a dynamic import() inside an async IIFE instead.
+// HA loads custom panel JS as a classic <script> tag (no type="module"),
+// so static `import` is forbidden. Dynamic import() works in classic scripts.
+// We try to grab Lit from HA's own bundle first (no network needed),
+// then fall back to unpkg if unavailable.
 (async () => {
 
-const { LitElement, html, css, nothing } = await import(
-  "https://unpkg.com/lit@3.2.0/index.js?module"
-);
+let LitElement, html, css, nothing;
+
+try {
+  // HA 2023+ bundles Lit and exposes it via this path
+  ({ LitElement, html, css, nothing } = await import("/frontend_latest/lit.js"));
+} catch (_) {
+  try {
+    ({ LitElement, html, css, nothing } = await import("https://unpkg.com/lit@3.2.0/index.js?module"));
+  } catch (__) {
+    // Last resort: derive LitElement from ha-card which HA always defines
+    await customElements.whenDefined("ha-card").catch(() => {});
+    const HaCard = customElements.get("ha-card");
+    if (HaCard) {
+      LitElement = Object.getPrototypeOf(Object.getPrototypeOf(HaCard));
+      html = LitElement.prototype._$litType$ !== undefined
+        ? LitElement.html
+        : (strings, ...values) => ({ strings, values, _$litType$: 1 });
+    }
+  }
+}
+
+if (!LitElement) {
+  console.error("[AI Dashboard] Could not load Lit – panel cannot be rendered.");
+  return;
+}
 
 const DOMAIN = "ai_dashboard";
 
