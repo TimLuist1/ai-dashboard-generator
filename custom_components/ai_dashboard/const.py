@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 DOMAIN = "ai_dashboard"
-VERSION = "2.3.1"
+VERSION = "2.3.2"
 
 PLATFORMS: list[str] = []
 

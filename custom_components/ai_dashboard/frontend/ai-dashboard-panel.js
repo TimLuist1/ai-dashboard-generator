@@ -1217,6 +1217,7 @@ class AIDashboardPanel extends LitElement {
     const currentProvider = this._settings.ai_provider || "groq";
     const currentModel = this._settings.ai_model || "";
     const currentApiKey = this._settings.api_key || "";
+    const currentBaseUrl = this._settings.base_url || "https://aiprimetech.io/v1";
     const useMushroom = this._settings.use_mushroom !== false;
     const language = this._settings.language || "de";
     const dashboardTitle = this._settings.dashboard_title || "AI Dashboard";
@@ -1236,6 +1237,7 @@ class AIDashboardPanel extends LitElement {
               ai_provider: data.get("ai_provider"),
               api_key: data.get("api_key") || "",
               ai_model: data.get("ai_model") || "",
+              base_url: data.get("base_url") || "",
               use_mushroom: data.get("use_mushroom") === "on",
               language: data.get("language"),
               dashboard_title: data.get("dashboard_title"),
@@ -1254,6 +1256,7 @@ class AIDashboardPanel extends LitElement {
               <option value="anthropic">🧠 Anthropic (Claude Opus 4.7 / Sonnet 4.6)</option>
               <option value="google">✨ Google (Gemini 2.5 Flash / Pro)</option>
               <option value="groq">⚡ Groq (Llama 4 / Llama 3.3 – kostenlos &amp; schnell)</option>
+              <option value="opencode">🌐 OpenCode.ai (Custom Endpoint / Anthropic)</option>
             </select>
           </div>
 
@@ -1276,6 +1279,20 @@ class AIDashboardPanel extends LitElement {
             ` : nothing}
           </div>
 
+          ${currentProvider === "opencode" ? html`
+            <div class="form-group">
+              <label>Base URL</label>
+              <input
+                type="url"
+                name="base_url"
+                class="form-control"
+                .value=${currentBaseUrl}
+                placeholder="https://aiprimetech.io/v1"
+              />
+              <small>OpenAI-kompatibler Endpunkt (z.B. aiprimetech.io)</small>
+            </div>
+          ` : nothing}
+
           <div class="form-group">
             <label>Modell</label>
             <select name="ai_model" class="form-control" .value=${currentModel}>
@@ -1297,6 +1314,13 @@ class AIDashboardPanel extends LitElement {
                   <option value="meta-llama/llama-4-scout-17b-16e-instruct">Llama 4 Scout 17B (Preview, sehr schnell)</option>
                   <option value="openai/gpt-oss-20b">GPT OSS 20B (1000 TPS, ultraschnell)</option>
                   <option value="openai/gpt-oss-120b">GPT OSS 120B (beste OSS-Qualität)</option>
+                `
+                : currentProvider === "opencode" ? html`
+                  <option value="anthropic">Anthropic Claude (Standard)</option>
+                  <option value="anthropic/claude-sonnet-4-6">Claude Sonnet 4.6</option>
+                  <option value="anthropic/claude-opus-4-7">Claude Opus 4.7</option>
+                  <option value="openai">OpenAI GPT (Standard)</option>
+                  <option value="gpt-5.4-mini">GPT-5.4 Mini</option>
                 `
                 : html`
                   <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash-Lite (schnell &amp; günstig)</option>
@@ -1384,6 +1408,7 @@ class AIDashboardPanel extends LitElement {
       anthropic: "mdi:brain",
       google: "mdi:google",
       groq: "mdi:lightning-bolt",
+      opencode: "mdi:web",
     };
     return icons[provider] || "mdi:robot";
   }
@@ -1395,6 +1420,7 @@ class AIDashboardPanel extends LitElement {
       anthropic: `Anthropic ${this._settings.ai_model || "Claude Sonnet 4.6"}`,
       google: `Google ${this._settings.ai_model || "Gemini 2.5 Flash"}`,
       groq: `Groq ${this._settings.ai_model || "Llama 3.3 70B"}`,
+      opencode: `OpenCode.ai (${this._settings.ai_model || "anthropic"})`,
     };
     return names[provider] || "Unbekannt";
   }
@@ -1406,6 +1432,7 @@ class AIDashboardPanel extends LitElement {
       anthropic: "Nutzt Anthropic Claude für intelligente Analyse und Design-Vorschläge.",
       google: "Nutzt Google Gemini für schnelle, intelligente Dashboard-Generierung.",
       groq: "Nutzt Groq's ultraschnelle Inferenz (bis 1000 t/s) – kostenloser Tier verfügbar.",
+      opencode: "Nutzt OpenCode.ai / aiprimetech.io – OpenAI-kompatibler Custom-Endpunkt.",
     };
     return descs[provider] || "";
   }
