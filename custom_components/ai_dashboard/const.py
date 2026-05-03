@@ -1,7 +1,7 @@
 """Constants for AI Dashboard Generator."""
 
 DOMAIN = "ai_dashboard"
-VERSION = "2.0.6"
+VERSION = "2.0.7"
 
 PLATFORMS: list = []
 

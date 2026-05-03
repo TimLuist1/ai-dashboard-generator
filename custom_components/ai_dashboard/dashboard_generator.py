@@ -44,6 +44,7 @@ class DashboardGenerator:
         self.use_mushroom = options.get(CONF_USE_MUSHROOM, True)
         self.language = options.get(CONF_LANGUAGE, "de")
         self.title = config.get(CONF_DASHBOARD_TITLE, DEFAULT_DASHBOARD_TITLE)
+        self.url_path = config.get(CONF_DASHBOARD_URL_PATH, DASHBOARD_URL_PATH)
 
     async def async_generate(
         self,
@@ -62,28 +63,29 @@ class DashboardGenerator:
         # Get AI enrichment if configured
         ai_data = await self._async_get_ai_enrichment(areas_data)
 
-        # Build the dashboard
-        views = []
-
-        # 1. Overview view
+        # ── Main dashboard: overview only ────────────────────────────
         overview_view = self._build_overview_view(areas_data, ai_data, images)
-        views.append(overview_view)
 
-        # 2. Room views (one per area)
+        dashboard_config = {
+            "title": self.title,
+            "views": [overview_view],
+        }
+
+        # ── Per-room dashboards ─────────────────────────────────────
+        room_dashboards: dict[str, dict] = {}
         for area in areas_data:
             if area["area_id"] == "_unassigned" and area["relevant_entities"] == 0:
                 continue
-            area_view = self._build_area_view(area, ai_data, images)
-            views.append(area_view)
+            room_dashboards[area["area_id"]] = self._build_room_dashboard(
+                area, ai_data, images
+            )
 
-        # Build final config
-        dashboard_config = {
-            "title": self.title,
-            "views": views,
-        }
+        # Attach room configs for apply step (stripped before saving to HA)
+        dashboard_config["_room_dashboards"] = room_dashboards  # type: ignore[assignment]
 
         _LOGGER.info(
-            "Dashboard generation complete: %d views created", len(views)
+            "Dashboard generation complete: main + %d room dashboards",
+            len(room_dashboards),
         )
         return dashboard_config
 
@@ -93,37 +95,75 @@ class DashboardGenerator:
 
         _LOGGER.info("Applying dashboard '%s' to Home Assistant", self.title)
 
+        # Extract room dashboards without mutating the stored config
+        room_dashboards: dict[str, dict] = config.get("_room_dashboards", {})  # type: ignore[assignment]
+        # Strip internal keys for the Lovelace main config
+        main_config = {k: v for k, v in config.items() if not k.startswith("_")}
+
+        url_path = self.url_path
+
         try:
-            lovelace_data = self.hass.data.get(LOVELACE_DOMAIN, {})
-            dashboards = lovelace_data.get("dashboards", {})
+            # ── Apply main dashboard ────────────────────────────────
+            await self._async_save_lovelace_dashboard(
+                url_path=url_path,
+                title=self.title,
+                icon="mdi:robot-happy",
+                show_in_sidebar=True,
+                config=main_config,
+            )
+            _LOGGER.info("Applied main dashboard at /%s", url_path)
 
-            url_path = self.config.get(CONF_DASHBOARD_URL_PATH, DASHBOARD_URL_PATH)
-
-            if url_path in dashboards:
-                # Update existing dashboard
-                dash = dashboards[url_path]
-                await dash.async_save(config)
-                _LOGGER.info("Updated existing dashboard at /%s", url_path)
-            else:
-                # Create new dashboard via storage
-                dash = lovelace_dashboard.LovelaceStorage(
-                    self.hass,
-                    {
-                        "id": url_path,
-                        "url_path": url_path,
-                        "title": self.title,
-                        "icon": "mdi:robot-happy",
-                        "show_in_sidebar": True,
-                        "require_admin": False,
-                        "mode": "storage",
-                    },
+            # ── Apply per-room dashboards ───────────────────────────
+            for area_id, room_config in room_dashboards.items():
+                room_url = f"{url_path}-{area_id}"
+                room_title = room_config.get("title", area_id)
+                room_icon = room_config.get("_icon", "mdi:home-floor-1")
+                # Strip internal metadata key before saving
+                clean_room = {k: v for k, v in room_config.items() if not k.startswith("_")}
+                await self._async_save_lovelace_dashboard(
+                    url_path=room_url,
+                    title=room_title,
+                    icon=room_icon,
+                    show_in_sidebar=False,
+                    config=clean_room,
                 )
-                await dash.async_save(config)
-                _LOGGER.info("Created new dashboard at /%s", url_path)
+                _LOGGER.info("Applied room dashboard at /%s", room_url)
 
         except Exception as err:  # pylint: disable=broad-except
             _LOGGER.error("Failed to apply dashboard: %s", err)
             raise
+
+    async def _async_save_lovelace_dashboard(
+        self,
+        url_path: str,
+        title: str,
+        icon: str,
+        show_in_sidebar: bool,
+        config: dict,
+    ) -> None:
+        """Create or update a Lovelace storage dashboard."""
+        from homeassistant.components.lovelace import DOMAIN as LOVELACE_DOMAIN
+
+        lovelace_data = self.hass.data.get(LOVELACE_DOMAIN, {})
+        dashboards = lovelace_data.get("dashboards", {})
+
+        if url_path in dashboards:
+            dash = dashboards[url_path]
+            await dash.async_save(config)
+        else:
+            dash = lovelace_dashboard.LovelaceStorage(
+                self.hass,
+                {
+                    "id": url_path,
+                    "url_path": url_path,
+                    "title": title,
+                    "icon": icon,
+                    "show_in_sidebar": show_in_sidebar,
+                    "require_admin": False,
+                    "mode": "storage",
+                },
+            )
+            await dash.async_save(config)
 
     # ─────────────────────────────────────────────────────────────
     # Overview view
@@ -308,7 +348,7 @@ class DashboardGenerator:
                     "icon_color": "blue",
                     "tap_action": {
                         "action": "navigate",
-                        "navigation_path": f"/{DASHBOARD_URL_PATH}#{area['area_id']}",
+                        "navigation_path": f"/{self.url_path}-{area['area_id']}",
                     },
                     "fill_container": True,
                 }
@@ -321,7 +361,7 @@ class DashboardGenerator:
                     "icon": area.get("icon", "mdi:home-floor-1"),
                     "tap_action": {
                         "action": "navigate",
-                        "navigation_path": f"/{DASHBOARD_URL_PATH}#{area['area_id']}",
+                        "navigation_path": f"/{self.url_path}-{area['area_id']}",
                     },
                 }
 
@@ -395,11 +435,33 @@ class DashboardGenerator:
         }
 
     # ─────────────────────────────────────────────────────────────
+    # Room dashboards (one standalone Lovelace dashboard per area)
+    # ─────────────────────────────────────────────────────────────
+
+    def _build_room_dashboard(
+        self, area: dict, ai_data: dict, images: dict
+    ) -> dict:
+        """Build a standalone Lovelace dashboard config for one room."""
+        area_id = area["area_id"]
+        area_name = area["name"]
+        area_icon = area.get("icon", "mdi:home-floor-1")
+        is_de = self.language == "de"
+
+        view = self._build_area_view(area, ai_data, images, back_url=f"/{self.url_path}")
+
+        return {
+            "title": area_name,
+            "views": [view],
+            # Internal metadata consumed by async_apply_dashboard
+            "_icon": area_icon,
+        }
+
+    # ─────────────────────────────────────────────────────────────
     # Area (room) views
     # ─────────────────────────────────────────────────────────────
 
     def _build_area_view(
-        self, area: dict, ai_data: dict, images: dict
+        self, area: dict, ai_data: dict, images: dict, back_url: str | None = None
     ) -> dict:
         """Build a complete view for one area/room."""
         area_id = area["area_id"]
@@ -413,6 +475,51 @@ class DashboardGenerator:
         area_ai = ai_data.get(area_id, {})
 
         sections = []
+
+        # Back-navigation row (when rendered as standalone room dashboard)
+        if back_url:
+            back_label = "← Übersicht" if self.language == "de" else "← Overview"
+            if self.use_mushroom:
+                sections.append(
+                    {
+                        "type": "grid",
+                        "cards": [
+                            {
+                                "type": "custom:mushroom-chips-card",
+                                "chips": [
+                                    {
+                                        "type": "template",
+                                        "icon": "mdi:arrow-left",
+                                        "content": back_label,
+                                        "tap_action": {
+                                            "action": "navigate",
+                                            "navigation_path": back_url,
+                                        },
+                                    }
+                                ],
+                            }
+                        ],
+                        "column_span": 4,
+                    }
+                )
+            else:
+                sections.append(
+                    {
+                        "type": "grid",
+                        "cards": [
+                            {
+                                "type": "button",
+                                "name": back_label,
+                                "icon": "mdi:arrow-left",
+                                "tap_action": {
+                                    "action": "navigate",
+                                    "navigation_path": back_url,
+                                },
+                            }
+                        ],
+                        "column_span": 4,
+                    }
+                )
 
         # Header section with image and title
         header = self._build_area_header(area, area_ai, image_url)

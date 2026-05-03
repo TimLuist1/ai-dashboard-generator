@@ -201,8 +201,10 @@ TOOL_DEFINITIONS: list[dict] = [
         "function": {
             "name": "generate_dashboard",
             "description": (
-                "Generiert ein neues AI-Dashboard auf Basis aller aktuellen Entities "
-                "und wendet es optional direkt an."
+                "Generiert ein vollständiges Dashboard-System: ein Haupt-Dashboard mit "
+                "Navigations-Buttons zu jedem Raum, plus ein eigenes Raum-Dashboard pro Bereich. "
+                "Alle Dashboards werden automatisch mit den passenden Entities befüllt. "
+                "Verwende auto_apply=true damit alles sofort in HA aktiv ist."
             ),
             "parameters": {
                 "type": "object",
@@ -551,11 +553,25 @@ class HAToolExecutor:
                 }
             )
 
+            room_count = len(config.get("_room_dashboards", {}))
+
             if args.get("auto_apply", False):
                 await generator.async_apply_dashboard(config)
-                return {"success": True, "message": "Dashboard generiert und angewendet."}
+                return {
+                    "success": True,
+                    "message": (
+                        f"Dashboard erstellt und angewendet: 1 Haupt-Dashboard + {room_count} Raum-Dashboards. "
+                        f"Klicke im Sidebar auf 'AI Dashboard' um es zu öffnen."
+                    ),
+                }
 
-            return {"success": True, "message": "Dashboard generiert. Klicke auf 'Anwenden' im Dashboard-Tab."}
+            return {
+                "success": True,
+                "message": (
+                    f"Dashboard generiert: 1 Haupt-Dashboard + {room_count} Raum-Dashboards. "
+                    f"Klicke auf 'Anwenden' im Dashboard-Tab um es zu aktivieren."
+                ),
+            }
         except Exception as err:  # pylint: disable=broad-except
             entry_data["status"] = "error"
             return {"error": f"Dashboard-Generierung fehlgeschlagen: {err}"}
