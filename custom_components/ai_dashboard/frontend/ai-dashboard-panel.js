@@ -11,12 +11,13 @@
  * - One-click apply
  */
 
-import {
-  LitElement,
-  html,
-  css,
-  nothing,
-} from "https://unpkg.com/lit@2.8.0/index.js?module";
+// HA loads custom panel JS as a classic <script> tag, so static `import`
+// is not allowed. Use a dynamic import() inside an async IIFE instead.
+(async () => {
+
+const { LitElement, html, css, nothing } = await import(
+  "https://unpkg.com/lit@3.2.0/index.js?module"
+);
 
 const DOMAIN = "ai_dashboard";
 
@@ -2402,3 +2403,5 @@ class AIDashboardPanel extends LitElement {
 }
 
 customElements.define("ai-dashboard-panel", AIDashboardPanel);
+
+})(); // end async IIFE
