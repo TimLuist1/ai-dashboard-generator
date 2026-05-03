@@ -1,0 +1,50 @@
+name: Validate
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: HACS Validation
+        uses: hacs/action@main
+        with:
+          category: integration
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          
+      - name: Install dependencies
+        run: |
+          pip install homeassistant voluptuous
+
+      - name: Validate manifest.json
+        run: |
+          python -c "
+          import json, sys
+          with open('custom_components/ai_dashboard/manifest.json') as f:
+              m = json.load(f)
+          required = ['domain', 'name', 'version', 'documentation', 'issue_tracker', 'codeowners']
+          for key in required:
+              assert key in m, f'Missing {key} in manifest.json'
+          print('manifest.json is valid')
+          "
+
+      - name: Check Python syntax
+        run: |
+          python -m py_compile custom_components/ai_dashboard/__init__.py
+          python -m py_compile custom_components/ai_dashboard/config_flow.py
+          python -m py_compile custom_components/ai_dashboard/const.py
+          python -m py_compile custom_components/ai_dashboard/entity_analyzer.py
+          python -m py_compile custom_components/ai_dashboard/ai_provider.py
+          python -m py_compile custom_components/ai_dashboard/dashboard_generator.py
+          echo "All Python files have valid syntax"

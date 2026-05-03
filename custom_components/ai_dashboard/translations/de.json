@@ -1,0 +1,52 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "AI Dashboard Generator einrichten",
+        "description": "Erstelle automatisch ein schönes Dashboard mit KI.\n\nDoku: {docs_url}",
+        "data": {
+          "dashboard_title": "Dashboard-Titel",
+          "ai_provider": "KI-Anbieter"
+        },
+        "data_description": {
+          "dashboard_title": "Name des neuen Dashboards (z.B. 'Mein Zuhause')",
+          "ai_provider": "Wähle einen KI-Anbieter. 'Offline' braucht keinen API-Key."
+        }
+      },
+      "api_key": {
+        "title": "API-Schlüssel für {provider}",
+        "description": "Gib deinen {provider} API-Schlüssel ein.",
+        "data": {
+          "api_key": "API-Schlüssel",
+          "ai_model": "KI-Modell"
+        },
+        "data_description": {
+          "api_key": "Der API-Schlüssel wird sicher gespeichert.",
+          "ai_model": "Wähle ein Modell. Mini/Haiku = schnell & günstig."
+        }
+      }
+    },
+    "error": {
+      "invalid_api_key": "Der API-Schlüssel ist ungültig oder hat keine Berechtigung.",
+      "cannot_connect": "Verbindung zum KI-Dienst fehlgeschlagen.",
+      "unknown": "Unbekannter Fehler. Prüfe die Logs."
+    },
+    "abort": {
+      "already_configured": "AI Dashboard ist bereits eingerichtet."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "AI Dashboard Einstellungen",
+        "data": {
+          "ai_provider": "KI-Anbieter",
+          "api_key": "API-Schlüssel",
+          "dashboard_title": "Dashboard-Titel",
+          "use_mushroom": "Mushroom Cards verwenden (empfohlen)",
+          "language": "Sprache"
+        }
+      }
+    }
+  }
+}
