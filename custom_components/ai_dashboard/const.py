@@ -293,8 +293,9 @@ AI_MODELS_UPDATED = {
         ("claude-3-7-sonnet-20250219", "Claude 3.7 Sonnet (2025)"),
     ],
     "google": [
-        ("gemini-2.0-flash", "Gemini 2.0 Flash (schnell)"),
-        ("gemini-2.5-flash-preview-04-17", "Gemini 2.5 Flash (2025)"),
-        ("gemini-2.5-pro-preview-05-06", "Gemini 2.5 Pro (2025, beste Qualität)"),
+        ("gemini-2.5-flash-lite", "Gemini 2.5 Flash-Lite (schnellste, günstigste)"),
+        ("gemini-2.5-flash", "Gemini 2.5 Flash ✅ (empfohlen)"),
+        ("gemini-2.5-pro", "Gemini 2.5 Pro (beste Qualität)"),
+        ("gemini-3-flash-preview", "Gemini 3 Flash Preview (neueste Generation)"),
     ],
 }
