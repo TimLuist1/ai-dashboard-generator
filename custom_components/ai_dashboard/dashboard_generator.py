@@ -141,29 +141,87 @@ class DashboardGenerator:
         show_in_sidebar: bool,
         config: dict,
     ) -> None:
-        """Create or update a Lovelace storage dashboard."""
+        """Create or update a Lovelace storage dashboard.
+
+        Creating a dashboard requires two steps:
+          1. Register the URL route + sidebar entry via DashboardsCollection
+             (or frontend panel registration as fallback).
+          2. Save the Lovelace config data to the storage object.
+
+        Skipping step 1 leaves the URL unregistered → 404.
+        """
         from homeassistant.components.lovelace import DOMAIN as LOVELACE_DOMAIN
+        from homeassistant.components.frontend import async_register_built_in_panel
 
         lovelace_data = self.hass.data.get(LOVELACE_DOMAIN, {})
-        dashboards = lovelace_data.get("dashboards", {})
+        dashboards: dict = lovelace_data.get("dashboards", {})
 
-        if url_path in dashboards:
-            dash = dashboards[url_path]
-            await dash.async_save(config)
-        else:
-            dash = lovelace_dashboard.LovelaceStorage(
-                self.hass,
-                {
-                    "id": url_path,
-                    "url_path": url_path,
-                    "title": title,
-                    "icon": icon,
-                    "show_in_sidebar": show_in_sidebar,
-                    "require_admin": False,
-                    "mode": "storage",
-                },
-            )
-            await dash.async_save(config)
+        if url_path not in dashboards:
+            # ── Try to create via DashboardsCollection (preferred) ────────
+            # This handles URL routing, sidebar entry, and metadata
+            # persistence across HA restarts.
+            collection = lovelace_data.get("dashboards_collection")
+            if collection is not None:
+                try:
+                    await collection.async_create_item(
+                        {
+                            "url_path": url_path,
+                            "title": title,
+                            "icon": icon,
+                            "show_in_sidebar": show_in_sidebar,
+                            "require_admin": False,
+                            "mode": "storage",
+                        }
+                    )
+                    _LOGGER.info(
+                        "Registered new Lovelace dashboard via collection: /%s",
+                        url_path,
+                    )
+                except Exception as err:  # pylint: disable=broad-except
+                    _LOGGER.warning(
+                        "DashboardsCollection.async_create_item failed (%s),"
+                        " falling back to manual panel registration",
+                        err,
+                    )
+
+            if url_path not in dashboards:
+                # ── Fallback: create storage object + register panel manually ─
+                dash = lovelace_dashboard.LovelaceStorage(
+                    self.hass,
+                    {
+                        "id": url_path,
+                        "url_path": url_path,
+                        "title": title,
+                        "icon": icon,
+                        "show_in_sidebar": show_in_sidebar,
+                        "require_admin": False,
+                        "mode": "storage",
+                    },
+                )
+                dashboards[url_path] = dash
+                try:
+                    async_register_built_in_panel(
+                        self.hass,
+                        "lovelace",
+                        sidebar_title=title if show_in_sidebar else None,
+                        sidebar_icon=icon if show_in_sidebar else None,
+                        frontend_url_path=url_path,
+                        config={"mode": "storage"},
+                        require_admin=False,
+                        update=True,
+                    )
+                    _LOGGER.info(
+                        "Registered new Lovelace dashboard via panel: /%s", url_path
+                    )
+                except Exception as err:  # pylint: disable=broad-except
+                    _LOGGER.warning(
+                        "async_register_built_in_panel failed for /%s: %s",
+                        url_path,
+                        err,
+                    )
+
+        # ── Save the Lovelace config data ──────────────────────────────────
+        await dashboards[url_path].async_save(config)
 
     # ─────────────────────────────────────────────────────────────
     # Overview view
