@@ -11,8 +11,9 @@ Ein vollautomatischer **KI-gestützter Dashboard-Generator** für Home Assistant
 
 ## ✨ Features
 
-- 🤖 **KI-Analyse** – Optionale Anbindung an OpenAI (GPT-4o), Anthropic (Claude 3.5) oder Google (Gemini 2.5 Flash) für smarte Benennungen und Beschreibungen
+- 🤖 **KI-Analyse** – Optionale Anbindung an OpenAI (GPT-4o), Anthropic (Claude 3.5), Google (Gemini 2.5) oder OpenCode.ai (Custom Endpoint)
 - 🧮 **Offline-Modus** – Komplett ohne API-Key, regelbasierter KI-Ersatz
+- 🔄 **API-Retry & Caching** – Zuverlässige KI-Antworten mit automatischer Wiederholung bei Rate-Limits
 - 🏠 **Raum-basiertes Design** – Automatische Gruppierung nach HA-Bereichen (Areas)
 - 🖼️ **Raumbilder** – Eigene Fotos für jeden Raum hochladen
 - 🎨 **Modernes Design** – Nutzt [Mushroom Cards](https://github.com/piitaya/lovelace-mushroom) für ein zeitgemäßes Aussehen
@@ -83,6 +84,7 @@ Installiere [Mushroom Cards](https://github.com/piitaya/lovelace-mushroom) über
 | **Claude 3.5 Haiku** | Sehr gut | ~$0.001/Nutzung | ✅ |
 | **Claude 3.5 Sonnet** | Exzellent | ~$0.003/Nutzung | ✅ |
 | **Gemini 2.5 Flash** | Sehr gut | Kostenlos (Limit) | ✅ |
+| **OpenCode.ai** | Flexibel | Custom Pricing | ✅ |
 
 ### Was wird gefiltert?
 

@@ -3,5 +3,7 @@
   "content_in_root": false,
   "render_readme": true,
   "homeassistant": "2024.1.0",
-  "hacs": "1.0.0"
+  "hacs": "1.0.0",
+  "filename": null,
+  "zip_release": true
 }
