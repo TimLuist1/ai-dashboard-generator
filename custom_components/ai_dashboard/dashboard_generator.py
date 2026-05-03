@@ -7,23 +7,10 @@ Uses HA 2024.1+ sections view with Mushroom Cards for best appearance.
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from homeassistant.core import HomeAssistant
-from homeassistant.components.lovelace import dashboard as lovelace_dashboard
-
-from .const import (
-    CONF_AI_PROVIDER,
-    CONF_AI_MODEL,
-    CONF_API_KEY,
-    CONF_DASHBOARD_TITLE,
-    CONF_DASHBOARD_URL_PATH,
-    CONF_USE_MUSHROOM,
-    CONF_LANGUAGE,
-    AI_PROVIDER_OFFLINE,
-    DASHBOARD_URL_PATH,
-    DEFAULT_DASHBOARD_TITLE,
-)
+if TYPE_CHECKING:
+    from homeassistant.core import HomeAssistant
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -33,23 +20,32 @@ class DashboardGenerator:
 
     def __init__(
         self,
-        hass: HomeAssistant,
-        config: dict,
-        options: dict,
+        hass: "HomeAssistant",
+        config: dict[str, Any],
+        options: dict[str, Any],
     ) -> None:
         """Initialize the generator."""
+        from .const import (
+            CONF_USE_MUSHROOM,
+            CONF_LANGUAGE,
+            CONF_DASHBOARD_TITLE,
+            CONF_DASHBOARD_URL_PATH,
+            DASHBOARD_URL_PATH,
+            DEFAULT_DASHBOARD_TITLE,
+        )
+
         self.hass = hass
         self.config = config
         self.options = options
         # AI settings live in options after the initial setup (options flow).
         # Merge with options taking precedence so provider/key/model are always found.
-        self._cfg = {**config, **{k: v for k, v in options.items() if v is not None and v != ""}}
+        self._cfg: dict[str, Any] = {**config, **{k: v for k, v in options.items() if v is not None and v != ""}}
         self.use_mushroom = self._cfg.get(CONF_USE_MUSHROOM, True)
         self.language = self._cfg.get(CONF_LANGUAGE, "de")
         self.title = self._cfg.get(CONF_DASHBOARD_TITLE, DEFAULT_DASHBOARD_TITLE)
         self.url_path = self._cfg.get(CONF_DASHBOARD_URL_PATH, DASHBOARD_URL_PATH)
         # Populated during async_generate – stores AI-generated design per area
-        self._ai_design: dict = {}
+        self._ai_design: dict[str, Any] = {}
 
     async def async_generate(
         self,
@@ -1156,15 +1152,17 @@ class DashboardGenerator:
     # Helpers
     # ─────────────────────────────────────────────────────────────
 
-    async def _async_get_ai_enrichment(self, areas_data: list[dict]) -> dict:
+    async def _async_get_ai_enrichment(self, areas_data: list[dict[str, Any]]) -> dict[str, Any]:
         """Get AI enrichment for entities."""
+        from .const import AI_PROVIDER_OFFLINE, AI_PROVIDER_OPENCODE
         from .ai_provider import create_ai_provider
 
-        provider_name = self._cfg.get(CONF_AI_PROVIDER, AI_PROVIDER_OFFLINE)
-        api_key = self._cfg.get(CONF_API_KEY, "")
-        model = self._cfg.get(CONF_AI_MODEL, "")
+        provider_name = self._cfg.get("ai_provider", AI_PROVIDER_OFFLINE)
+        api_key = self._cfg.get("api_key", "")
+        model = self._cfg.get("ai_model", "")
+        base_url = self._cfg.get("base_url", "") if provider_name == AI_PROVIDER_OPENCODE else ""
 
-        provider = create_ai_provider(self.hass, provider_name, api_key, model)
+        provider = create_ai_provider(self.hass, provider_name, api_key, model, base_url)
 
         _LOGGER.debug("Using AI provider: %s", provider_name)
 

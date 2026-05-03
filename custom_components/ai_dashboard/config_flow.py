@@ -18,11 +18,14 @@ from .const import (
     CONF_DASHBOARD_URL_PATH,
     CONF_USE_MUSHROOM,
     CONF_LANGUAGE,
+    CONF_BASE_URL,
     AI_PROVIDER_OFFLINE,
     AI_PROVIDER_OPENAI,
     AI_PROVIDER_ANTHROPIC,
     AI_PROVIDER_GOOGLE,
     AI_PROVIDER_GROQ,
+    AI_PROVIDER_OPENCODE,
+    OPENCODE_DEFAULT_BASE_URL,
     AI_PROVIDERS,
     AI_MODELS,
     DEFAULT_DASHBOARD_TITLE,
@@ -38,6 +41,7 @@ _PROVIDER_NAMES = {
     AI_PROVIDER_ANTHROPIC: "Anthropic",
     AI_PROVIDER_GOOGLE: "Google",
     AI_PROVIDER_GROQ: "Groq",
+    AI_PROVIDER_OPENCODE: "OpenCode.ai",
 }
 
 
@@ -72,27 +76,7 @@ class AIDashboardConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             self._data.update(user_input)
-            provider = user_input.get(CONF_AI_PROVIDER, AI_PROVIDER_OFFLINE)
-
-            if provider != AI_PROVIDER_OFFLINE:
-                return await self.async_step_api_key()
-
-            return self.async_create_entry(
-                title=user_input.get(CONF_DASHBOARD_TITLE, DEFAULT_DASHBOARD_TITLE),
-                data={
-                    CONF_AI_PROVIDER: provider,
-                    CONF_AI_MODEL: "",
-                    CONF_API_KEY: "",
-                    CONF_DASHBOARD_TITLE: user_input.get(
-                        CONF_DASHBOARD_TITLE, DEFAULT_DASHBOARD_TITLE
-                    ),
-                    CONF_DASHBOARD_URL_PATH: DEFAULT_DASHBOARD_URL_PATH,
-                },
-                options={
-                    CONF_USE_MUSHROOM: True,
-                    CONF_LANGUAGE: "de",
-                },
-            )
+            return await self.async_step_api_key()
 
         schema = vol.Schema(
             {
@@ -100,7 +84,7 @@ class AIDashboardConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     CONF_DASHBOARD_TITLE, default=DEFAULT_DASHBOARD_TITLE
                 ): str,
                 vol.Required(
-                    CONF_AI_PROVIDER, default=AI_PROVIDER_OFFLINE
+                    CONF_AI_PROVIDER, default=DEFAULT_AI_PROVIDER
                 ): vol.In(AI_PROVIDERS),
             }
         )
@@ -120,37 +104,45 @@ class AIDashboardConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         provider = self._data.get(CONF_AI_PROVIDER, AI_PROVIDER_OFFLINE)
         model_choices = _model_choices(provider)
         default_model = _default_model(provider)
+        is_opencode = provider == AI_PROVIDER_OPENCODE
 
         if user_input is not None:
             api_key = user_input.get(CONF_API_KEY, "").strip()
             model = user_input.get(CONF_AI_MODEL, default_model)
+            base_url = user_input.get(CONF_BASE_URL, OPENCODE_DEFAULT_BASE_URL).strip()
 
             if api_key:
-                valid = await _async_validate_api_key(self.hass, provider, api_key, model)
+                validate_base_url = base_url if is_opencode else ""
+                valid = await _async_validate_api_key(self.hass, provider, api_key, model, validate_base_url)
                 if not valid:
                     errors["base"] = "invalid_api_key"
 
             if not errors:
+                entry_data = {
+                    **self._data,
+                    CONF_API_KEY: api_key,
+                    CONF_AI_MODEL: model,
+                    CONF_DASHBOARD_URL_PATH: DEFAULT_DASHBOARD_URL_PATH,
+                }
+                if is_opencode:
+                    entry_data[CONF_BASE_URL] = base_url or OPENCODE_DEFAULT_BASE_URL
                 return self.async_create_entry(
                     title=self._data.get(CONF_DASHBOARD_TITLE, DEFAULT_DASHBOARD_TITLE),
-                    data={
-                        **self._data,
-                        CONF_API_KEY: api_key,
-                        CONF_AI_MODEL: model,
-                        CONF_DASHBOARD_URL_PATH: DEFAULT_DASHBOARD_URL_PATH,
-                    },
+                    data=entry_data,
                     options={
                         CONF_USE_MUSHROOM: True,
                         CONF_LANGUAGE: "de",
                     },
                 )
 
-        schema = vol.Schema(
-            {
-                vol.Required(CONF_API_KEY): str,
-                vol.Required(CONF_AI_MODEL, default=default_model): vol.In(model_choices),
-            }
-        )
+        schema_fields = {
+            vol.Required(CONF_API_KEY): str,
+            vol.Required(CONF_AI_MODEL, default=default_model): vol.In(model_choices),
+        }
+        if is_opencode:
+            schema_fields[vol.Optional(CONF_BASE_URL, default=OPENCODE_DEFAULT_BASE_URL)] = str
+
+        schema = vol.Schema(schema_fields)
 
         return self.async_show_form(
             step_id="api_key",
@@ -192,7 +184,7 @@ class AIDashboardOptionsFlow(config_entries.OptionsFlow):
 
         current_provider = (
             entry.options.get(CONF_AI_PROVIDER)
-            or entry.data.get(CONF_AI_PROVIDER, AI_PROVIDER_OFFLINE)
+            or entry.data.get(CONF_AI_PROVIDER, DEFAULT_AI_PROVIDER)
         )
         current_title = (
             entry.options.get(CONF_DASHBOARD_TITLE)
@@ -200,34 +192,10 @@ class AIDashboardOptionsFlow(config_entries.OptionsFlow):
         )
 
         if user_input is not None:
-            new_provider = user_input.get(CONF_AI_PROVIDER, AI_PROVIDER_OFFLINE)
+            new_provider = user_input.get(CONF_AI_PROVIDER, DEFAULT_AI_PROVIDER)
             self._new_provider = new_provider
             self._base_input = user_input
-
-            if new_provider != AI_PROVIDER_OFFLINE:
-                return await self.async_step_model()
-
-            # Offline – save immediately
-            new_options = {
-                **entry.options,
-                CONF_AI_PROVIDER: new_provider,
-                CONF_API_KEY: "",
-                CONF_AI_MODEL: "",
-                CONF_DASHBOARD_TITLE: user_input.get(CONF_DASHBOARD_TITLE, DEFAULT_DASHBOARD_TITLE),
-                CONF_USE_MUSHROOM: user_input.get(CONF_USE_MUSHROOM, True),
-                CONF_LANGUAGE: user_input.get(CONF_LANGUAGE, "de"),
-            }
-            self.hass.config_entries.async_update_entry(
-                entry,
-                data={
-                    **entry.data,
-                    CONF_AI_PROVIDER: new_provider,
-                    CONF_API_KEY: "",
-                    CONF_AI_MODEL: "",
-                    CONF_DASHBOARD_TITLE: user_input.get(CONF_DASHBOARD_TITLE, DEFAULT_DASHBOARD_TITLE),
-                },
-            )
-            return self.async_create_entry(title="", data=new_options)
+            return await self.async_step_model()
 
         schema = vol.Schema(
             {
@@ -257,7 +225,7 @@ class AIDashboardOptionsFlow(config_entries.OptionsFlow):
         """API key + model selection for the chosen provider."""
         errors: dict[str, str] = {}
         entry = self.config_entry
-        provider = self._new_provider or entry.data.get(CONF_AI_PROVIDER, AI_PROVIDER_OFFLINE)
+        provider = self._new_provider or entry.data.get(CONF_AI_PROVIDER, DEFAULT_AI_PROVIDER)
 
         model_choices = _model_choices(provider)
         current_model = (
@@ -329,13 +297,13 @@ class AIDashboardOptionsFlow(config_entries.OptionsFlow):
         )
 
 
-async def _async_validate_api_key(hass: Any, provider: str, api_key: str, model: str) -> bool:
+async def _async_validate_api_key(hass: Any, provider: str, api_key: str, model: str, base_url: str = "") -> bool:
     """Validate the API key with a lightweight test request."""
     if not api_key:
         return False
     try:
         from .ai_provider import create_ai_provider
-        ai = create_ai_provider(hass, provider, api_key, model)
+        ai = create_ai_provider(hass, provider, api_key, model, base_url)
         return await ai.async_test_connection()
     except Exception as err:  # pylint: disable=broad-except
         _LOGGER.warning("API key validation failed: %s", err)

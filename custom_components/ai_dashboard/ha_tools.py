@@ -5,13 +5,11 @@ Helpers convert them to Anthropic / Google format on demand.
 """
 from __future__ import annotations
 
-import json
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers import area_registry as ar
-from homeassistant.helpers import entity_registry as er
+if TYPE_CHECKING:
+    from homeassistant.core import HomeAssistant
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -363,7 +361,7 @@ class HAToolExecutor:
         }
     )
 
-    def __init__(self, hass: HomeAssistant) -> None:
+    def __init__(self, hass: "HomeAssistant") -> None:
         self.hass = hass
 
     def is_destructive(self, tool_name: str) -> bool:
@@ -426,6 +424,8 @@ class HAToolExecutor:
         return {"success": True, "message": f"Szene '{args['name']}' erstellt."}
 
     async def _tool_rename_entity(self, args: dict) -> dict:
+        from homeassistant.helpers import entity_registry as er
+
         entity_reg = er.async_get(self.hass)
         entry = entity_reg.async_get(args["entity_id"])
         if not entry:
@@ -437,6 +437,9 @@ class HAToolExecutor:
         }
 
     async def _tool_assign_area(self, args: dict) -> dict:
+        from homeassistant.helpers import entity_registry as er
+        from homeassistant.helpers import area_registry as ar
+
         entity_reg = er.async_get(self.hass)
         entry = entity_reg.async_get(args["entity_id"])
         if not entry:
@@ -453,6 +456,9 @@ class HAToolExecutor:
         }
 
     async def _tool_get_entity_details(self, args: dict) -> dict:
+        from homeassistant.helpers import entity_registry as er
+        from homeassistant.helpers import area_registry as ar
+
         entity_id = args["entity_id"]
         state = self.hass.states.get(entity_id)
         if state is None:
@@ -577,15 +583,15 @@ class HAToolExecutor:
             return {"error": f"Dashboard-Generierung fehlgeschlagen: {err}"}
 
     async def _tool_find_entities(self, args: dict) -> dict:
+        from homeassistant.helpers import area_registry as ar
+        from homeassistant.helpers import device_registry as dr
+        from homeassistant.helpers import entity_registry as er
+
         domain_filter = args.get("domain", "").lower()
         area_filter = args.get("area", "").lower()
         dc_filter = args.get("device_class", "").lower()
         name_filter = args.get("name_contains", "").lower()
         state_filter = args.get("state", "").lower()
-
-        from homeassistant.helpers import area_registry as ar
-        from homeassistant.helpers import device_registry as dr
-        from homeassistant.helpers import entity_registry as er
 
         area_reg = ar.async_get(self.hass)
         device_reg = dr.async_get(self.hass)

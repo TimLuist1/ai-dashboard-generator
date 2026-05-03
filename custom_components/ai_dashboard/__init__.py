@@ -6,19 +6,14 @@ import logging
 import os
 import shutil
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-import voluptuous as vol
+if TYPE_CHECKING:
+    from homeassistant.core import HomeAssistant
+    from homeassistant.config_entries import ConfigEntry
+    from homeassistant.helpers.typing import ConfigType
 
-from homeassistant.components import frontend, websocket_api
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, ServiceCall
-from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers import config_validation as cv
-from homeassistant.helpers.storage import Store
-from homeassistant.helpers.typing import ConfigType
-
-from .const import (
+from .const import (  # noqa: E402
     DOMAIN,
     PLATFORMS,
     PANEL_COMPONENT_NAME,
@@ -51,6 +46,9 @@ from .const import (
     HTTP_IMAGE_UPLOAD,
     HTTP_IMAGE_SERVE,
 )
+
+import voluptuous as vol
+from homeassistant.helpers import config_validation as cv
 
 _LOGGER = logging.getLogger(__name__)
 

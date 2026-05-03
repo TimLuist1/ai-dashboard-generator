@@ -1,18 +1,25 @@
 """AI provider module for AI Dashboard Generator.
 
-Supports: Offline (rule-based), OpenAI, Anthropic, Google Gemini.
+Supports: Offline (rule-based), OpenAI, Anthropic, Google Gemini, Groq.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
+if TYPE_CHECKING:
+    from homeassistant.core import HomeAssistant
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _get_session(hass: "HomeAssistant"):
+    """Get aiohttp client session lazily."""
+    from homeassistant.helpers.aiohttp_client import async_get_clientsession
+    return async_get_clientsession(hass)
 
 
 class AIProvider(ABC):
@@ -24,20 +31,20 @@ class AIProvider(ABC):
 
     @abstractmethod
     async def async_analyze_entities(
-        self, areas_data: list[dict], language: str = "de"
-    ) -> dict:
+        self, areas_data: list[dict[str, Any]], language: str = "de"
+    ) -> dict[str, Any]:
         """Analyze entities and return enriched data with names and suggestions."""
 
     @abstractmethod
     async def async_generate_dashboard_hints(
-        self, areas_data: list[dict], language: str = "de"
-    ) -> dict:
+        self, areas_data: list[dict[str, Any]], language: str = "de"
+    ) -> dict[str, Any]:
         """Generate high-level dashboard hints (room descriptions, colors)."""
 
     @abstractmethod
     async def async_generate_dashboard_design(
-        self, areas_data: list[dict], language: str = "de"
-    ) -> dict:
+        self, areas_data: list[dict[str, Any]], language: str = "de"
+    ) -> dict[str, Any]:
         """Generate a complete Lovelace dashboard design per room.
 
         Returns a dict with structure:
@@ -70,9 +77,10 @@ class OfflineAIProvider(AIProvider):
         return True
 
     async def async_analyze_entities(
-        self, areas_data: list[dict], language: str = "de"
-    ) -> dict:
+        self, areas_data: list[dict[str, Any]], language: str = "de"
+    ) -> dict[str, Any]:
         """Analyze entities using rule-based approach."""
+        _ = language  # kept for interface compatibility
         result = {}
         for area in areas_data:
             area_id = area["area_id"]
@@ -90,8 +98,8 @@ class OfflineAIProvider(AIProvider):
         return result
 
     async def async_generate_dashboard_hints(
-        self, areas_data: list[dict], language: str = "de"
-    ) -> dict:
+        self, areas_data: list[dict[str, Any]], language: str = "de"
+    ) -> dict[str, Any]:
         """Return basic hints without AI."""
         return {
             "overview_subtitle": "Mein Zuhause" if language == "de" else "My Home",
@@ -138,12 +146,13 @@ class OfflineAIProvider(AIProvider):
         return "blue-grey"
 
     async def async_generate_dashboard_design(
-        self, areas_data: list[dict], language: str = "de"
-    ) -> dict:
+        self, areas_data: list[dict[str, Any]], language: str = "de"
+    ) -> dict[str, Any]:
         """Offline provider has no AI design capability."""
+        _ = language  # kept for interface compatibility
         return {}
 
-    def _get_area_subtitle(self, area: dict, language: str) -> str:
+    def _get_area_subtitle(self, area: dict[str, Any], language: str) -> str:
         """Generate a subtitle for an area."""
         counts = area.get("entity_counts", {})
         parts = []
@@ -181,7 +190,7 @@ class OpenAIProvider(AIProvider):
     async def async_test_connection(self) -> bool:
         """Test API connection."""
         try:
-            session = async_get_clientsession(self.hass)
+            session = _get_session(self.hass)
             async with session.post(
                 self.API_URL,
                 headers={
@@ -200,8 +209,8 @@ class OpenAIProvider(AIProvider):
             return False
 
     async def async_analyze_entities(
-        self, areas_data: list[dict], language: str = "de"
-    ) -> dict:
+        self, areas_data: list[dict[str, Any]], language: str = "de"
+    ) -> dict[str, Any]:
         """Use GPT to analyze and improve entity names."""
         prompt = self._build_analysis_prompt(areas_data, language)
 
@@ -214,8 +223,8 @@ class OpenAIProvider(AIProvider):
             return await offline.async_analyze_entities(areas_data, language)
 
     async def async_generate_dashboard_hints(
-        self, areas_data: list[dict], language: str = "de"
-    ) -> dict:
+        self, areas_data: list[dict[str, Any]], language: str = "de"
+    ) -> dict[str, Any]:
         """Generate dashboard hints via GPT."""
         prompt = self._build_hints_prompt(areas_data, language)
 
@@ -228,8 +237,8 @@ class OpenAIProvider(AIProvider):
             return await offline.async_generate_dashboard_hints(areas_data, language)
 
     async def async_generate_dashboard_design(
-        self, areas_data: list[dict], language: str = "de"
-    ) -> dict:
+        self, areas_data: list[dict[str, Any]], language: str = "de"
+    ) -> dict[str, Any]:
         """Generate complete dashboard design via GPT."""
         prompt = self._build_design_prompt(areas_data, language)
         try:
@@ -239,7 +248,7 @@ class OpenAIProvider(AIProvider):
             _LOGGER.warning("OpenAI design generation failed: %s – using rule-based layout", err)
             return {}
 
-    def _build_analysis_prompt(self, areas_data: list[dict], language: str) -> str:
+    def _build_analysis_prompt(self, areas_data: list[dict[str, Any]], language: str) -> str:
         """Build the entity analysis prompt."""
         lang_instruction = (
             "Antworte auf Deutsch." if language == "de" else "Respond in English."
@@ -281,7 +290,7 @@ Antworte NUR mit validem JSON (kein Markdown, keine Erklärungen):
 
 Verwende nur mdi: Icons. Farben: red, pink, purple, deep-purple, indigo, blue, light-blue, cyan, teal, green, light-green, lime, yellow, amber, orange, deep-orange, brown, grey, blue-grey."""
 
-    def _build_hints_prompt(self, areas_data: list[dict], language: str) -> str:
+    def _build_hints_prompt(self, areas_data: list[dict[str, Any]], language: str) -> str:
         """Build the dashboard hints prompt."""
         lang_instruction = (
             "Antworte auf Deutsch." if language == "de" else "Respond in English."
@@ -309,13 +318,12 @@ Antworte NUR mit validem JSON:
   }}
 }}"""
 
-    def _build_design_prompt(self, areas_data: list[dict], language: str) -> str:
+    def _build_design_prompt(self, areas_data: list[dict[str, Any]], language: str) -> str:
         """Build the complete dashboard design prompt."""
         is_de = language == "de"
         instruction = "auf Deutsch" if is_de else "in English"
-
         # Build compact entity list per room
-        rooms_data: dict = {}
+        rooms_data: dict[str, Any] = {}
         for area in areas_data:
             if area["area_id"] == "_unassigned":
                 continue
@@ -401,34 +409,52 @@ Antworte NUR mit validem JSON (kein Markdown, keine Kommentare):
 }}"""
 
     async def _async_call_api(self, prompt: str, max_tokens: int = 2000) -> str:
-        """Call the OpenAI API."""
-        session = async_get_clientsession(self.hass)
-        async with session.post(
-            self.API_URL,
-            headers={
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": self.model,
-                "messages": [
-                    {
-                        "role": "system",
-                        "content": "You are a Home Assistant dashboard expert. Always respond with valid JSON only.",
+        """Call the OpenAI API with retry logic."""
+        session = _get_session(self.hass)
+        last_error: Exception | None = None
+
+        for attempt in range(3):
+            try:
+                async with session.post(
+                    self.API_URL,
+                    headers={
+                        "Authorization": f"Bearer {self.api_key}",
+                        "Content-Type": "application/json",
                     },
-                    {"role": "user", "content": prompt},
-                ],
-                "max_tokens": max_tokens,
-                "temperature": 0.5,
-                "response_format": {"type": "json_object"},
-            },
-            timeout=60,
-        ) as resp:
-            if resp.status != 200:
-                error_text = await resp.text()
-                raise ValueError(f"OpenAI API error {resp.status}: {error_text[:200]}")
-            data = await resp.json()
-            return data["choices"][0]["message"]["content"]
+                    json={
+                        "model": self.model,
+                        "messages": [
+                            {
+                                "role": "system",
+                                "content": "You are a Home Assistant dashboard expert. Always respond with valid JSON only.",
+                            },
+                            {"role": "user", "content": prompt},
+                        ],
+                        "max_tokens": max_tokens,
+                        "temperature": 0.5,
+                        "response_format": {"type": "json_object"},
+                    },
+                    timeout=aiohttp.ClientTimeout(total=60),
+                ) as resp:
+                    if resp.status == 429:
+                        _LOGGER.warning("Rate limited, waiting 2s before retry...")
+                        await asyncio.sleep(2)
+                        continue
+                    if resp.status != 200:
+                        error_text = await resp.text()
+                        raise ValueError(f"OpenAI API error {resp.status}: {error_text[:200]}")
+                    data = await resp.json()
+                    return data["choices"][0]["message"]["content"]
+            except asyncio.TimeoutError:
+                last_error = asyncio.TimeoutError("API request timed out")
+                _LOGGER.warning("API timeout (attempt %d/3)", attempt + 1)
+                await asyncio.sleep(1)
+            except Exception as err:
+                last_error = err
+                _LOGGER.warning("API error (attempt %d/3): %s", attempt + 1, err)
+                await asyncio.sleep(1)
+
+        raise last_error or RuntimeError("API call failed after 3 attempts")
 
     def _parse_json_response(self, text: str) -> dict:
         """Parse JSON from AI response."""
@@ -454,7 +480,7 @@ class AnthropicProvider(AIProvider):
     async def async_test_connection(self) -> bool:
         """Test API connection."""
         try:
-            session = async_get_clientsession(self.hass)
+            session = _get_session(self.hass)
             async with session.post(
                 self.API_URL,
                 headers={
@@ -474,8 +500,8 @@ class AnthropicProvider(AIProvider):
             return False
 
     async def async_analyze_entities(
-        self, areas_data: list[dict], language: str = "de"
-    ) -> dict:
+        self, areas_data: list[dict[str, Any]], language: str = "de"
+    ) -> dict[str, Any]:
         """Use Claude to analyze entities."""
         # Reuse OpenAI provider's prompts since they work for Claude too
         openai_provider = OpenAIProvider(self.hass, self.api_key, self.model)
@@ -490,8 +516,8 @@ class AnthropicProvider(AIProvider):
             return await offline.async_analyze_entities(areas_data, language)
 
     async def async_generate_dashboard_hints(
-        self, areas_data: list[dict], language: str = "de"
-    ) -> dict:
+        self, areas_data: list[dict[str, Any]], language: str = "de"
+    ) -> dict[str, Any]:
         """Generate hints via Claude."""
         openai_provider = OpenAIProvider(self.hass, self.api_key, self.model)
         prompt = openai_provider._build_hints_prompt(areas_data, language)
@@ -505,8 +531,8 @@ class AnthropicProvider(AIProvider):
             return await offline.async_generate_dashboard_hints(areas_data, language)
 
     async def async_generate_dashboard_design(
-        self, areas_data: list[dict], language: str = "de"
-    ) -> dict:
+        self, areas_data: list[dict[str, Any]], language: str = "de"
+    ) -> dict[str, Any]:
         """Generate complete dashboard design via Claude."""
         openai_provider = OpenAIProvider(self.hass, self.api_key, self.model)
         prompt = openai_provider._build_design_prompt(areas_data, language)
@@ -519,7 +545,7 @@ class AnthropicProvider(AIProvider):
 
     async def _async_call_api(self, prompt: str, max_tokens: int = 2000) -> str:
         """Call the Anthropic API."""
-        session = async_get_clientsession(self.hass)
+        session = _get_session(self.hass)
         async with session.post(
             self.API_URL,
             headers={
@@ -556,7 +582,7 @@ class GoogleAIProvider(AIProvider):
     async def async_test_connection(self) -> bool:
         """Test API connection."""
         try:
-            session = async_get_clientsession(self.hass)
+            session = _get_session(self.hass)
             url = self.API_URL.format(model=self.model)
             async with session.post(
                 f"{url}?key={self.api_key}",
@@ -571,8 +597,8 @@ class GoogleAIProvider(AIProvider):
             return False
 
     async def async_analyze_entities(
-        self, areas_data: list[dict], language: str = "de"
-    ) -> dict:
+        self, areas_data: list[dict[str, Any]], language: str = "de"
+    ) -> dict[str, Any]:
         """Use Gemini to analyze entities."""
         openai_provider = OpenAIProvider(self.hass, self.api_key, self.model)
         prompt = openai_provider._build_analysis_prompt(areas_data, language)
@@ -586,8 +612,8 @@ class GoogleAIProvider(AIProvider):
             return await offline.async_analyze_entities(areas_data, language)
 
     async def async_generate_dashboard_hints(
-        self, areas_data: list[dict], language: str = "de"
-    ) -> dict:
+        self, areas_data: list[dict[str, Any]], language: str = "de"
+    ) -> dict[str, Any]:
         """Generate hints via Gemini."""
         openai_provider = OpenAIProvider(self.hass, self.api_key, self.model)
         prompt = openai_provider._build_hints_prompt(areas_data, language)
@@ -601,8 +627,8 @@ class GoogleAIProvider(AIProvider):
             return await offline.async_generate_dashboard_hints(areas_data, language)
 
     async def async_generate_dashboard_design(
-        self, areas_data: list[dict], language: str = "de"
-    ) -> dict:
+        self, areas_data: list[dict[str, Any]], language: str = "de"
+    ) -> dict[str, Any]:
         """Generate complete dashboard design via Gemini."""
         openai_provider = OpenAIProvider(self.hass, self.api_key, self.model)
         prompt = openai_provider._build_design_prompt(areas_data, language)
@@ -615,7 +641,7 @@ class GoogleAIProvider(AIProvider):
 
     async def _async_call_api(self, prompt: str, max_tokens: int = 2000) -> str:
         """Call the Google Gemini API."""
-        session = async_get_clientsession(self.hass)
+        session = _get_session(self.hass)
         url = self.API_URL.format(model=self.model)
         async with session.post(
             f"{url}?key={self.api_key}",
@@ -656,7 +682,7 @@ class GroqProvider(OpenAIProvider):
 
     async def _async_call_api(self, prompt: str, max_tokens: int = 2000) -> str:
         """Call the Groq API (OpenAI-compatible, JSON mode supported for most models)."""
-        session = async_get_clientsession(self.hass)
+        session = _get_session(self.hass)
         # Groq supports response_format for llama-3.x and gpt-oss models
         use_json_format = any(
             m in self.model
@@ -693,11 +719,49 @@ class GroqProvider(OpenAIProvider):
             return data["choices"][0]["message"]["content"]
 
 
+class OpenCodeProvider(OpenAIProvider):
+    """OpenCode.ai provider - OpenAI-compatible API with custom base URL."""
+
+    def __init__(self, hass: HomeAssistant, api_key: str, model: str, base_url: str = "") -> None:
+        """Initialize OpenCode provider with optional custom base URL."""
+        self.hass = hass
+        self.api_key = api_key
+        self.model = model or "anthropic"
+        self._base_url = base_url.rstrip("/") if base_url else "https://aiprimetech.io/v1"
+
+    @property
+    def API_URL(self) -> str:
+        """Return the API URL, using custom base URL if set."""
+        return f"{self._base_url}/chat/completions"
+
+    async def async_test_connection(self) -> bool:
+        """Test API connection."""
+        try:
+            session = _get_session(self.hass)
+            async with session.post(
+                self.API_URL,
+                headers={
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": self.model,
+                    "messages": [{"role": "user", "content": "Hello"}],
+                    "max_tokens": 5,
+                },
+                timeout=10,
+            ) as resp:
+                return resp.status == 200
+        except Exception:  # pylint: disable=broad-except
+            return False
+
+
 def create_ai_provider(
     hass: HomeAssistant,
     provider: str,
     api_key: str,
     model: str,
+    base_url: str = "",
 ) -> AIProvider:
     """Factory function to create the appropriate AI provider."""
     from .const import (
@@ -706,6 +770,7 @@ def create_ai_provider(
         AI_PROVIDER_ANTHROPIC,
         AI_PROVIDER_GOOGLE,
         AI_PROVIDER_GROQ,
+        AI_PROVIDER_OPENCODE,
     )
 
     if provider == AI_PROVIDER_OPENAI:
@@ -716,5 +781,7 @@ def create_ai_provider(
         return GoogleAIProvider(hass, api_key, model)
     elif provider == AI_PROVIDER_GROQ:
         return GroqProvider(hass, api_key, model)
+    elif provider == AI_PROVIDER_OPENCODE:
+        return OpenCodeProvider(hass, api_key, model, base_url)
     else:
         return OfflineAIProvider()

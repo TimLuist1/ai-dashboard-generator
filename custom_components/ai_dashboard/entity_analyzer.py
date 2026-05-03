@@ -8,23 +8,10 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers import area_registry as ar
-from homeassistant.helpers import device_registry as dr
-from homeassistant.helpers import entity_registry as er
-
-from .const import (
-    ALWAYS_EXCLUDE_DOMAINS,
-    AREA_ICONS,
-    DEFAULT_AREA_ICON,
-    DEFAULT_INCLUDE_DOMAINS,
-    DOMAIN_ICONS,
-    FILTER_DEVICE_CLASSES,
-    FILTER_PATTERNS,
-    SENSOR_DEVICE_CLASS_ICONS,
-)
+if TYPE_CHECKING:
+    from homeassistant.core import HomeAssistant
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -63,13 +50,36 @@ class AreaInfo:
 class EntityAnalyzer:
     """Analyzes all Home Assistant entities and groups them by area."""
 
-    def __init__(self, hass: HomeAssistant) -> None:
+    def __init__(self, hass: "HomeAssistant") -> None:
         """Initialize the analyzer."""
         self.hass = hass
+        self._cache: dict[str, Any] | None = None
+        self._cache_time: float = 0
+        self._cache_ttl: float = 30.0  # 30 seconds cache
 
-    async def async_get_areas_with_entities(self) -> list[dict]:
-        """Get all areas with their entities, analyzed and filtered."""
-        area_reg = ar.async_get(self.hass)
+    async def async_get_areas_with_entities(self) -> list[dict[str, Any]]:
+        """Get all areas with their entities, analyzed and filtered.
+
+        Results are cached for 30 seconds to avoid repeated entity parsing.
+        """
+        import time
+        now = time.monotonic()
+
+        if self._cache is not None and (now - self._cache_time) < self._cache_ttl:
+            _LOGGER.debug("Returning cached entity analysis")
+            return self._cache
+        from homeassistant.helpers import device_registry as dr
+        from homeassistant.helpers import entity_registry as er
+        from .const import (
+            ALWAYS_EXCLUDE_DOMAINS,
+            AREA_ICONS,
+            DEFAULT_AREA_ICON,
+            DEFAULT_INCLUDE_DOMAINS,
+            DOMAIN_ICONS,
+            FILTER_DEVICE_CLASSES,
+            FILTER_PATTERNS,
+            SENSOR_DEVICE_CLASS_ICONS,
+        )
         device_reg = dr.async_get(self.hass)
         entity_reg = er.async_get(self.hass)
 
@@ -192,6 +202,10 @@ class EntityAnalyzer:
                     "relevant_entities": len(relevant_entities),
                 }
             )
+
+        # Cache the result
+        self._cache = result
+        self._cache_time = time.monotonic()
 
         return result
 

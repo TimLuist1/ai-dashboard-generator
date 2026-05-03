@@ -2,12 +2,10 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers import area_registry as ar
-from homeassistant.helpers import device_registry as dr
-from homeassistant.helpers import entity_registry as er
+if TYPE_CHECKING:
+    from homeassistant.core import HomeAssistant
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -42,7 +40,7 @@ _RELEVANT_ATTRS = {
 class HAContextBuilder:
     """Builds a comprehensive, token-efficient snapshot of HA for AI consumption."""
 
-    def __init__(self, hass: HomeAssistant) -> None:
+    def __init__(self, hass: "HomeAssistant") -> None:
         self.hass = hass
 
     async def async_build(
@@ -51,6 +49,10 @@ class HAContextBuilder:
         max_entities: int = 300,
     ) -> dict:
         """Build and return a full HA context dict."""
+        from homeassistant.helpers import area_registry as ar
+        from homeassistant.helpers import device_registry as dr
+        from homeassistant.helpers import entity_registry as er
+
         area_reg = ar.async_get(self.hass)
         device_reg = dr.async_get(self.hass)
         entity_reg = er.async_get(self.hass)

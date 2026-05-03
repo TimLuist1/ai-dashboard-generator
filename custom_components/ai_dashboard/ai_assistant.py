@@ -23,18 +23,10 @@ import json
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
-
-from .ha_context import HAContextBuilder
-from .ha_tools import (
-    HAToolExecutor,
-    TOOL_DEFINITIONS,
-    get_anthropic_tools,
-    get_google_tools,
-)
+if TYPE_CHECKING:
+    from homeassistant.core import HomeAssistant
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -60,7 +52,7 @@ class AIAssistant:
 
     def __init__(
         self,
-        hass: HomeAssistant,
+        hass: "HomeAssistant",
         provider: str,
         api_key: str,
         model: str,
@@ -71,9 +63,23 @@ class AIAssistant:
         self.api_key = api_key
         self.model = model
         self.language = language
-        self._context_builder = HAContextBuilder(hass)
-        self._tool_executor = HAToolExecutor(hass)
+        self._context_builder: HAContextBuilder | None = None
+        self._tool_executor: HAToolExecutor | None = None
         self._history: list[dict] = []  # raw provider-agnostic messages
+
+    @property
+    def _context(self) -> HAContextBuilder:
+        if self._context_builder is None:
+            from .ha_context import HAContextBuilder
+            self._context_builder = HAContextBuilder(self.hass)
+        return self._context_builder
+
+    @property
+    def _tools(self) -> HAToolExecutor:
+        if self._tool_executor is None:
+            from .ha_tools import HAToolExecutor
+            self._tool_executor = HAToolExecutor(self.hass)
+        return self._tool_executor
 
     # ─────────────────────────────────────────────────────────────
     # Public API
@@ -96,11 +102,11 @@ class AIAssistant:
             }
         """
         # Build HA context once per request
-        ha_context = await self._context_builder.async_build(
+        ha_context = await self._context.async_build(
             include_states=True,
             max_entities=300 if context_depth == "full" else 150,
         )
-        context_summary = self._context_builder.build_compact_summary(ha_context)
+        context_summary = self._context.build_compact_summary(ha_context)
         system_prompt = self._build_system_prompt(context_summary)
 
         # Append user message to history
@@ -152,7 +158,7 @@ class AIAssistant:
                 tool_args = tc["args"]
                 call_id = tc.get("id", tool_name)
 
-                is_destructive = self._tool_executor.is_destructive(tool_name)
+                is_destructive = self._tools.is_destructive(tool_name)
                 action = ActionItem(
                     tool_name=tool_name,
                     tool_call_id=call_id,
@@ -163,7 +169,7 @@ class AIAssistant:
 
                 if auto_execute or not is_destructive:
                     # Execute immediately
-                    result = await self._tool_executor.async_execute(tool_name, tool_args)
+                    result = await self._tools.async_execute(tool_name, tool_args)
                     action.executed = True
                     action.result = result
                     executed_actions.append(action)
@@ -230,7 +236,7 @@ class AIAssistant:
         """Execute actions that the user has confirmed."""
         results = []
         for action_data in actions:
-            result = await self._tool_executor.async_execute(
+            result = await self._tools.async_execute(
                 action_data["tool_name"],
                 action_data["args"],
             )
@@ -278,6 +284,9 @@ class AIAssistant:
     # ─────────────────────────────────────────────────────────────
 
     async def _call_openai(self, system_prompt: str, messages: list[dict]) -> dict:
+        from homeassistant.helpers.aiohttp_client import async_get_clientsession
+        from .ha_tools import TOOL_DEFINITIONS
+
         session = async_get_clientsession(self.hass)
 
         openai_msgs: list[dict] = [{"role": "system", "content": system_prompt}]
@@ -353,6 +362,9 @@ class AIAssistant:
     # ─────────────────────────────────────────────────────────────
 
     async def _call_anthropic(self, system_prompt: str, messages: list[dict]) -> dict:
+        from homeassistant.helpers.aiohttp_client import async_get_clientsession
+        from .ha_tools import get_anthropic_tools
+
         session = async_get_clientsession(self.hass)
 
         anthropic_msgs: list[dict] = []
@@ -424,6 +436,9 @@ class AIAssistant:
     # ─────────────────────────────────────────────────────────────
 
     async def _call_google(self, system_prompt: str, messages: list[dict]) -> dict:
+        from homeassistant.helpers.aiohttp_client import async_get_clientsession
+        from .ha_tools import get_google_tools
+
         session = async_get_clientsession(self.hass)
         model = self.model or "gemini-2.0-flash"
         url = (

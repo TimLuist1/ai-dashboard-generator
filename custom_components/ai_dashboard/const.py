@@ -1,9 +1,10 @@
 """Constants for AI Dashboard Generator."""
+from __future__ import annotations
 
 DOMAIN = "ai_dashboard"
-VERSION = "2.2.0"
+VERSION = "2.3.0"
 
-PLATFORMS: list = []
+PLATFORMS: list[str] = []
 
 # Configuration keys
 CONF_AI_PROVIDER = "ai_provider"
@@ -16,6 +17,10 @@ CONF_EXCLUDE_ENTITIES = "exclude_entities"
 CONF_THEME = "theme"
 CONF_USE_MUSHROOM = "use_mushroom"
 CONF_LANGUAGE = "language"
+CONF_BASE_URL = "base_url"
+
+# OpenCode.ai default base URL
+OPENCODE_DEFAULT_BASE_URL = "https://aiprimetech.io/v1"
 
 # AI Provider options
 AI_PROVIDER_OFFLINE = "offline"
@@ -23,16 +28,17 @@ AI_PROVIDER_OPENAI = "openai"
 AI_PROVIDER_ANTHROPIC = "anthropic"
 AI_PROVIDER_GOOGLE = "google"
 AI_PROVIDER_GROQ = "groq"
+AI_PROVIDER_OPENCODE = "opencode"
 
-AI_PROVIDERS = {
-    AI_PROVIDER_OFFLINE: "Offline / Regelbasiert (Keine API nötig)",
+AI_PROVIDERS: dict[str, str] = {
     AI_PROVIDER_OPENAI: "OpenAI (GPT-5.5 / GPT-5.4-mini)",
     AI_PROVIDER_ANTHROPIC: "Anthropic (Claude Opus 4.7 / Sonnet 4.6)",
     AI_PROVIDER_GOOGLE: "Google (Gemini 2.5 Flash / Pro)",
     AI_PROVIDER_GROQ: "Groq (Llama 4 / Llama 3.3 – kostenlos & schnell)",
+    AI_PROVIDER_OPENCODE: "OpenCode.ai (Custom endpoint)",
 }
 
-AI_MODELS = {
+AI_MODELS: dict[str, list[tuple[str, str]]] = {
     AI_PROVIDER_OPENAI: [
         ("gpt-4o-mini", "GPT-4o Mini (bewährt, günstig)"),
         ("gpt-4o", "GPT-4o (bewährt, gut)"),
@@ -57,13 +63,19 @@ AI_MODELS = {
         ("openai/gpt-oss-20b", "GPT OSS 20B (1000 TPS, ultraschnell)"),
         ("openai/gpt-oss-120b", "GPT OSS 120B (beste OSS-Qualität)"),
     ],
+    AI_PROVIDER_OPENCODE: [
+        ("anthropic", "Anthropic (Claude)"),
+        ("openai", "OpenAI (GPT)"),
+        ("google", "Google (Gemini)"),
+        ("custom", "Custom Model"),
+    ],
 }
 
 # Default values
 DEFAULT_DASHBOARD_TITLE = "AI Dashboard"
 DEFAULT_DASHBOARD_URL_PATH = "ai-dashboard"
 DEFAULT_THEME = "default"
-DEFAULT_AI_PROVIDER = AI_PROVIDER_OFFLINE
+DEFAULT_AI_PROVIDER = AI_PROVIDER_GROQ
 
 # Dashboard URL path used to create the HA dashboard
 DASHBOARD_URL_PATH = "ai-dashboard"
@@ -87,7 +99,7 @@ STATUS_DONE = "done"
 STATUS_ERROR = "error"
 
 # Entity domains to include by default
-DEFAULT_INCLUDE_DOMAINS = [
+DEFAULT_INCLUDE_DOMAINS: list[str] = [
     "light",
     "switch",
     "sensor",
@@ -110,7 +122,7 @@ DEFAULT_INCLUDE_DOMAINS = [
 ]
 
 # Entity domains always excluded
-ALWAYS_EXCLUDE_DOMAINS = [
+ALWAYS_EXCLUDE_DOMAINS: list[str] = [
     "automation",
     "script",
     "scene",
@@ -124,7 +136,7 @@ ALWAYS_EXCLUDE_DOMAINS = [
 ]
 
 # Patterns in entity IDs that indicate non-user-relevant entities
-FILTER_PATTERNS = [
+FILTER_PATTERNS: list[str] = [
     "_rssi",
     "_lqi",
     "_linkquality",
@@ -147,13 +159,13 @@ FILTER_PATTERNS = [
 ]
 
 # Sensor device classes that are non-relevant by default
-FILTER_DEVICE_CLASSES = [
+FILTER_DEVICE_CLASSES: list[str] = [
     "signal_strength",
     "voltage",
 ]
 
 # Icons for domains
-DOMAIN_ICONS = {
+DOMAIN_ICONS: dict[str, str] = {
     "light": "mdi:lightbulb",
     "switch": "mdi:toggle-switch",
     "sensor": "mdi:chart-line",
@@ -176,7 +188,7 @@ DOMAIN_ICONS = {
 }
 
 # Sensor device class icons
-SENSOR_DEVICE_CLASS_ICONS = {
+SENSOR_DEVICE_CLASS_ICONS: dict[str, str] = {
     "temperature": "mdi:thermometer",
     "humidity": "mdi:water-percent",
     "pressure": "mdi:gauge",
@@ -205,7 +217,7 @@ SENSOR_DEVICE_CLASS_ICONS = {
 }
 
 # Area icons (for common room names)
-AREA_ICONS = {
+AREA_ICONS: dict[str, str] = {
     "wohnzimmer": "mdi:sofa",
     "living": "mdi:sofa",
     "living room": "mdi:sofa",
@@ -294,7 +306,7 @@ HTTP_IMAGE_UPLOAD = f"/api/{DOMAIN}/upload_image"
 HTTP_IMAGE_SERVE = f"/api/{DOMAIN}/images"
 
 # AI model options (updated 2026)
-AI_MODELS_UPDATED = {
+AI_MODELS_UPDATED: dict[str, list[tuple[str, str]]] = {
     "openai": [
         ("gpt-4o-mini", "GPT-4o Mini (schnell, günstig)"),
         ("gpt-4o", "GPT-4o (beste Qualität)"),
