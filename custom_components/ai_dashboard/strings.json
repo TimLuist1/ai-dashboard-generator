@@ -39,12 +39,24 @@
     "step": {
       "init": {
         "title": "AI Dashboard Einstellungen",
+        "description": "Wähle Anbieter, Titel und UI-Einstellungen.",
         "data": {
           "ai_provider": "KI-Anbieter",
-          "api_key": "API-Schlüssel",
           "dashboard_title": "Dashboard-Titel",
           "use_mushroom": "Mushroom Cards verwenden (empfohlen)",
           "language": "Sprache"
+        }
+      },
+      "model": {
+        "title": "API-Schlüssel & Modell für {provider}",
+        "description": "Aktueller Key: {current_key_hint}\n\nLeer lassen = bestehenden Key behalten.",
+        "data": {
+          "api_key": "Neuer API-Schlüssel (leer = unverändert)",
+          "ai_model": "KI-Modell"
+        },
+        "data_description": {
+          "api_key": "Leer lassen, um den gespeicherten Schlüssel zu behalten.",
+          "ai_model": "Wähle das Modell. Mini/Haiku = schnell & günstig."
         }
       }
     }

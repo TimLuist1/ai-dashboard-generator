@@ -39,12 +39,24 @@
     "step": {
       "init": {
         "title": "AI Dashboard Settings",
+        "description": "Choose provider, title and UI settings.",
         "data": {
           "ai_provider": "AI Provider",
-          "api_key": "API Key",
           "dashboard_title": "Dashboard Title",
           "use_mushroom": "Use Mushroom Cards (recommended)",
           "language": "Language"
+        }
+      },
+      "model": {
+        "title": "API Key & Model for {provider}",
+        "description": "Current key: {current_key_hint}\n\nLeave empty to keep existing key.",
+        "data": {
+          "api_key": "New API Key (empty = keep current)",
+          "ai_model": "AI Model"
+        },
+        "data_description": {
+          "api_key": "Leave empty to keep the stored key.",
+          "ai_model": "Choose model. Mini/Haiku = fast & cheap."
         }
       }
     }

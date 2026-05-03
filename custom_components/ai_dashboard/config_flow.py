@@ -8,7 +8,6 @@ import voluptuous as vol
 
 from homeassistant import config_entries
 from homeassistant.core import callback
-from homeassistant.data_entry_flow import FlowResult
 
 from .const import (
     DOMAIN,
@@ -24,12 +23,31 @@ from .const import (
     AI_PROVIDER_ANTHROPIC,
     AI_PROVIDER_GOOGLE,
     AI_PROVIDERS,
+    AI_MODELS,
     DEFAULT_DASHBOARD_TITLE,
     DEFAULT_DASHBOARD_URL_PATH,
     DEFAULT_AI_PROVIDER,
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+_DOCS_URL = "https://github.com/TimLuist1/ai-dashboard-generator"
+_PROVIDER_NAMES = {
+    AI_PROVIDER_OPENAI: "OpenAI",
+    AI_PROVIDER_ANTHROPIC: "Anthropic",
+    AI_PROVIDER_GOOGLE: "Google",
+}
+
+
+def _model_choices(provider: str) -> dict[str, str]:
+    """Return model id → label mapping for a given provider."""
+    return {mid: mname for mid, mname in AI_MODELS.get(provider, [])}
+
+
+def _default_model(provider: str) -> str:
+    """Return the first model id for a provider, or empty string."""
+    choices = _model_choices(provider)
+    return next(iter(choices), "")
 
 
 class AIDashboardConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -43,9 +61,8 @@ class AIDashboardConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
-        """Handle the initial step - basic configuration."""
-        # Only allow one instance
+    ) -> config_entries.ConfigFlowResult:
+        """Handle the initial step – basic configuration."""
         await self.async_set_unique_id(DOMAIN)
         self._abort_if_unique_id_configured()
 
@@ -90,27 +107,28 @@ class AIDashboardConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="user",
             data_schema=schema,
             errors=errors,
-            description_placeholders={
-                "docs_url": "https://github.com/YOUR_USERNAME/ai-dashboard-generator"
-            },
+            description_placeholders={"docs_url": _DOCS_URL},
         )
 
     async def async_step_api_key(
         self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    ) -> config_entries.ConfigFlowResult:
         """Step for entering the API key."""
         errors: dict[str, str] = {}
         provider = self._data.get(CONF_AI_PROVIDER, AI_PROVIDER_OFFLINE)
+        model_choices = _model_choices(provider)
+        default_model = _default_model(provider)
 
         if user_input is not None:
             api_key = user_input.get(CONF_API_KEY, "").strip()
-            model = user_input.get(CONF_AI_MODEL, "")
+            model = user_input.get(CONF_AI_MODEL, default_model)
 
-            # Validate API key by testing a simple request
-            valid = await self._async_validate_api_key(provider, api_key, model)
-            if not valid:
-                errors["base"] = "invalid_api_key"
-            else:
+            if api_key:
+                valid = await _async_validate_api_key(self.hass, provider, api_key, model)
+                if not valid:
+                    errors["base"] = "invalid_api_key"
+
+            if not errors:
                 return self.async_create_entry(
                     title=self._data.get(CONF_DASHBOARD_TITLE, DEFAULT_DASHBOARD_TITLE),
                     data={
@@ -125,21 +143,6 @@ class AIDashboardConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     },
                 )
 
-        # Build model choices based on provider
-        from .const import AI_MODELS
-
-        model_choices = {}
-        if provider in AI_MODELS:
-            for model_id, model_name in AI_MODELS[provider]:
-                model_choices[model_id] = model_name
-        default_model = list(model_choices.keys())[0] if model_choices else ""
-
-        provider_names = {
-            AI_PROVIDER_OPENAI: "OpenAI",
-            AI_PROVIDER_ANTHROPIC: "Anthropic",
-            AI_PROVIDER_GOOGLE: "Google",
-        }
-
         schema = vol.Schema(
             {
                 vol.Required(CONF_API_KEY): str,
@@ -152,25 +155,9 @@ class AIDashboardConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data_schema=schema,
             errors=errors,
             description_placeholders={
-                "provider": provider_names.get(provider, provider),
+                "provider": _PROVIDER_NAMES.get(provider, provider),
             },
         )
-
-    async def _async_validate_api_key(
-        self, provider: str, api_key: str, model: str
-    ) -> bool:
-        """Validate the API key with a test request."""
-        if not api_key:
-            return False
-
-        try:
-            from .ai_provider import create_ai_provider
-
-            ai = create_ai_provider(self.hass, provider, api_key, model)
-            return await ai.async_test_connection()
-        except Exception as err:  # pylint: disable=broad-except
-            _LOGGER.warning("API key validation failed: %s", err)
-            return False
 
     @staticmethod
     @callback
@@ -178,49 +165,79 @@ class AIDashboardConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         config_entry: config_entries.ConfigEntry,
     ) -> AIDashboardOptionsFlow:
         """Return the options flow handler."""
-        return AIDashboardOptionsFlow(config_entry)
+        return AIDashboardOptionsFlow()
 
 
 class AIDashboardOptionsFlow(config_entries.OptionsFlow):
-    """Handle options flow for AI Dashboard."""
+    """Handle options flow for AI Dashboard.
 
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
+    NOTE: Do NOT override __init__ with config_entry – it is set automatically
+    by HA 2024.3+ via self.config_entry.
+    """
+
+    def __init__(self) -> None:
         """Initialize options flow."""
-        self.config_entry = config_entry
+        self._new_provider: str = ""
+        self._base_input: dict[str, Any] = {}
 
+    # ------------------------------------------------------------------ step 1
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
-        """Manage the options."""
+    ) -> config_entries.ConfigFlowResult:
+        """Manage the options – provider / title / UI settings."""
+        entry = self.config_entry
         errors: dict[str, str] = {}
 
-        if user_input is not None:
-            return self.async_create_entry(title="", data=user_input)
+        current_provider = (
+            entry.options.get(CONF_AI_PROVIDER)
+            or entry.data.get(CONF_AI_PROVIDER, AI_PROVIDER_OFFLINE)
+        )
+        current_title = (
+            entry.options.get(CONF_DASHBOARD_TITLE)
+            or entry.data.get(CONF_DASHBOARD_TITLE, DEFAULT_DASHBOARD_TITLE)
+        )
 
-        current_options = self.config_entry.options
-        current_data = self.config_entry.data
+        if user_input is not None:
+            new_provider = user_input.get(CONF_AI_PROVIDER, AI_PROVIDER_OFFLINE)
+            self._new_provider = new_provider
+            self._base_input = user_input
+
+            if new_provider != AI_PROVIDER_OFFLINE:
+                return await self.async_step_model()
+
+            # Offline – save immediately
+            new_options = {
+                **entry.options,
+                CONF_AI_PROVIDER: new_provider,
+                CONF_API_KEY: "",
+                CONF_AI_MODEL: "",
+                CONF_DASHBOARD_TITLE: user_input.get(CONF_DASHBOARD_TITLE, DEFAULT_DASHBOARD_TITLE),
+                CONF_USE_MUSHROOM: user_input.get(CONF_USE_MUSHROOM, True),
+                CONF_LANGUAGE: user_input.get(CONF_LANGUAGE, "de"),
+            }
+            self.hass.config_entries.async_update_entry(
+                entry,
+                data={
+                    **entry.data,
+                    CONF_AI_PROVIDER: new_provider,
+                    CONF_API_KEY: "",
+                    CONF_AI_MODEL: "",
+                    CONF_DASHBOARD_TITLE: user_input.get(CONF_DASHBOARD_TITLE, DEFAULT_DASHBOARD_TITLE),
+                },
+            )
+            return self.async_create_entry(title="", data=new_options)
 
         schema = vol.Schema(
             {
-                vol.Required(
-                    CONF_AI_PROVIDER,
-                    default=current_data.get(CONF_AI_PROVIDER, AI_PROVIDER_OFFLINE),
-                ): vol.In(AI_PROVIDERS),
-                vol.Optional(
-                    CONF_API_KEY,
-                    default=current_data.get(CONF_API_KEY, ""),
-                ): str,
-                vol.Optional(
-                    CONF_DASHBOARD_TITLE,
-                    default=current_data.get(CONF_DASHBOARD_TITLE, DEFAULT_DASHBOARD_TITLE),
-                ): str,
+                vol.Required(CONF_AI_PROVIDER, default=current_provider): vol.In(AI_PROVIDERS),
+                vol.Optional(CONF_DASHBOARD_TITLE, default=current_title): str,
                 vol.Required(
                     CONF_USE_MUSHROOM,
-                    default=current_options.get(CONF_USE_MUSHROOM, True),
+                    default=entry.options.get(CONF_USE_MUSHROOM, True),
                 ): bool,
                 vol.Required(
                     CONF_LANGUAGE,
-                    default=current_options.get(CONF_LANGUAGE, "de"),
+                    default=entry.options.get(CONF_LANGUAGE, "de"),
                 ): vol.In({"de": "Deutsch", "en": "English"}),
             }
         )
@@ -230,3 +247,94 @@ class AIDashboardOptionsFlow(config_entries.OptionsFlow):
             data_schema=schema,
             errors=errors,
         )
+
+    # ------------------------------------------------------------------ step 2
+    async def async_step_model(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        """API key + model selection for the chosen provider."""
+        errors: dict[str, str] = {}
+        entry = self.config_entry
+        provider = self._new_provider or entry.data.get(CONF_AI_PROVIDER, AI_PROVIDER_OFFLINE)
+
+        model_choices = _model_choices(provider)
+        current_model = (
+            entry.options.get(CONF_AI_MODEL)
+            or entry.data.get(CONF_AI_MODEL, "")
+        )
+        default_model = current_model if current_model in model_choices else _default_model(provider)
+        current_key = (
+            entry.options.get(CONF_API_KEY)
+            or entry.data.get(CONF_API_KEY, "")
+        )
+
+        if user_input is not None:
+            raw_key = user_input.get(CONF_API_KEY, "").strip()
+            api_key = raw_key if raw_key else current_key
+            model = user_input.get(CONF_AI_MODEL, default_model)
+
+            if api_key:
+                valid = await _async_validate_api_key(self.hass, provider, api_key, model)
+                if not valid:
+                    errors["base"] = "invalid_api_key"
+            else:
+                errors["base"] = "invalid_api_key"
+
+            if not errors:
+                new_title = self._base_input.get(
+                    CONF_DASHBOARD_TITLE
+                ) or entry.data.get(CONF_DASHBOARD_TITLE, DEFAULT_DASHBOARD_TITLE)
+                new_options = {
+                    **entry.options,
+                    CONF_AI_PROVIDER: provider,
+                    CONF_API_KEY: api_key,
+                    CONF_AI_MODEL: model,
+                    CONF_DASHBOARD_TITLE: new_title,
+                    CONF_USE_MUSHROOM: self._base_input.get(
+                        CONF_USE_MUSHROOM, entry.options.get(CONF_USE_MUSHROOM, True)
+                    ),
+                    CONF_LANGUAGE: self._base_input.get(
+                        CONF_LANGUAGE, entry.options.get(CONF_LANGUAGE, "de")
+                    ),
+                }
+                self.hass.config_entries.async_update_entry(
+                    entry,
+                    data={
+                        **entry.data,
+                        CONF_AI_PROVIDER: provider,
+                        CONF_API_KEY: api_key,
+                        CONF_AI_MODEL: model,
+                        CONF_DASHBOARD_TITLE: new_title,
+                    },
+                )
+                return self.async_create_entry(title="", data=new_options)
+
+        schema = vol.Schema(
+            {
+                vol.Optional(CONF_API_KEY, default=""): str,
+                vol.Required(CONF_AI_MODEL, default=default_model): vol.In(model_choices),
+            }
+        )
+
+        return self.async_show_form(
+            step_id="model",
+            data_schema=schema,
+            errors=errors,
+            description_placeholders={
+                "provider": _PROVIDER_NAMES.get(provider, provider),
+                "current_key_hint": "✓ gespeichert" if current_key else "—",
+            },
+        )
+
+
+async def _async_validate_api_key(hass: Any, provider: str, api_key: str, model: str) -> bool:
+    """Validate the API key with a lightweight test request."""
+    if not api_key:
+        return False
+    try:
+        from .ai_provider import create_ai_provider
+        ai = create_ai_provider(hass, provider, api_key, model)
+        return await ai.async_test_connection()
+    except Exception as err:  # pylint: disable=broad-except
+        _LOGGER.warning("API key validation failed: %s", err)
+        return False

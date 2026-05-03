@@ -63,6 +63,22 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     return True
 
 
+def _get_entry_value(entry: ConfigEntry, key: str, default: Any = "") -> Any:
+    """Read a setting from options first, then data, then return default."""
+    val = entry.options.get(key)
+    if val is not None and val != "":
+        return val
+    return entry.data.get(key, default)
+
+
+async def _async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Called when options are saved – reset assistant so new settings are picked up."""
+    entry_data = hass.data.get(DOMAIN, {}).get(entry.entry_id)
+    if entry_data is not None:
+        entry_data.pop("assistant", None)
+    _LOGGER.debug("AI Dashboard options updated – assistant session reset")
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up AI Dashboard from a config entry."""
     hass.data.setdefault(DOMAIN, {})
@@ -92,14 +108,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Register the frontend panel
     await _async_register_panel(hass, entry)
 
-    # Register WebSocket API handlers
-    _register_websocket_handlers(hass)
+    # Register WebSocket API handlers (guard: only once per hass instance)
+    if not hass.data[DOMAIN].get("_ws_registered"):
+        _register_websocket_handlers(hass)
+        hass.data[DOMAIN]["_ws_registered"] = True
 
     # Register HTTP endpoints
     await _async_register_http_endpoints(hass, entry)
 
     # Register services
     _register_services(hass, entry)
+
+    # Listen for options changes
+    entry.async_on_unload(entry.add_update_listener(_async_update_options))
 
     _LOGGER.info("AI Dashboard Generator setup complete")
     return True
@@ -510,10 +531,10 @@ def _register_websocket_handlers(hass: HomeAssistant) -> None:
             return
 
         entry = entries[0]
-        provider = entry.data.get("ai_provider", "offline")
-        api_key = entry.data.get("api_key", "")
-        model = entry.data.get("ai_model", "")
-        language = entry.options.get("language", "de")
+        provider = _get_entry_value(entry, "ai_provider", "offline")
+        api_key = _get_entry_value(entry, "api_key", "")
+        model = _get_entry_value(entry, "ai_model", "")
+        language = entry.options.get("language") or entry.data.get("language", "de")
 
         # Retrieve or create a persistent assistant per config entry
         entry_data = hass.data[DOMAIN].get(entry.entry_id, {})
