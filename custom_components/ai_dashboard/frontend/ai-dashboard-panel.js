@@ -1233,7 +1233,7 @@ class AIDashboardPanel extends LitElement {
   }
 
   _renderSettingsTab() {
-    const currentProvider = this._settings.ai_provider || "offline";
+    const currentProvider = this._settings.ai_provider || "groq";
     const currentModel = this._settings.ai_model || "";
     const currentApiKey = this._settings.api_key || "";
     const useMushroom = this._settings.use_mushroom !== false;
@@ -1402,7 +1402,7 @@ class AIDashboardPanel extends LitElement {
   // ─────────────────────────────────────────────────────────────
 
   _getProviderIcon() {
-    const provider = this._settings.ai_provider || "offline";
+    const provider = this._settings.ai_provider || "groq";
     const icons = {
       offline: "mdi:calculator-variant",
       openai: "mdi:robot",
@@ -1414,7 +1414,7 @@ class AIDashboardPanel extends LitElement {
   }
 
   _getProviderName() {
-    const provider = this._settings.ai_provider || "offline";
+    const provider = this._settings.ai_provider || "groq";
     const names = {
       offline: "Offline / Regelbasiert",
       openai: `OpenAI ${this._settings.ai_model || "GPT-5.4-mini"}`,
@@ -1426,7 +1426,7 @@ class AIDashboardPanel extends LitElement {
   }
 
   _getProviderDescription() {
-    const provider = this._settings.ai_provider || "offline";
+    const provider = this._settings.ai_provider || "groq";
     const descs = {
       offline: "Verwendet intelligente Regeln ohne externen Dienst. Kein API-Key nötig.",
       openai: "Nutzt OpenAI GPT für intelligente Benennungen und Empfehlungen.",
