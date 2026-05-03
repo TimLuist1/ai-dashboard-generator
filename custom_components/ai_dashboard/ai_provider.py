@@ -643,6 +643,56 @@ class GoogleAIProvider(AIProvider):
             return data["candidates"][0]["content"]["parts"][0]["text"]
 
 
+class GroqProvider(OpenAIProvider):
+    """Groq provider – OpenAI-compatible API with ultra-fast inference."""
+
+    API_URL = "https://api.groq.com/openai/v1/chat/completions"
+
+    def __init__(self, hass: HomeAssistant, api_key: str, model: str) -> None:
+        """Initialize Groq provider."""
+        self.hass = hass
+        self.api_key = api_key
+        self.model = model or "llama-3.3-70b-versatile"
+
+    async def _async_call_api(self, prompt: str, max_tokens: int = 2000) -> str:
+        """Call the Groq API (OpenAI-compatible, JSON mode supported for most models)."""
+        session = async_get_clientsession(self.hass)
+        # Groq supports response_format for llama-3.x and gpt-oss models
+        use_json_format = any(
+            m in self.model
+            for m in ("llama-3", "gpt-oss", "llama-4", "qwen")
+        )
+        payload: dict = {
+            "model": self.model,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": "You are a Home Assistant dashboard expert. Always respond with valid JSON only.",
+                },
+                {"role": "user", "content": prompt},
+            ],
+            "max_tokens": max_tokens,
+            "temperature": 0.5,
+        }
+        if use_json_format:
+            payload["response_format"] = {"type": "json_object"}
+
+        async with session.post(
+            self.API_URL,
+            headers={
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+            },
+            json=payload,
+            timeout=60,
+        ) as resp:
+            if resp.status != 200:
+                error_text = await resp.text()
+                raise ValueError(f"Groq API error {resp.status}: {error_text[:200]}")
+            data = await resp.json()
+            return data["choices"][0]["message"]["content"]
+
+
 def create_ai_provider(
     hass: HomeAssistant,
     provider: str,
@@ -650,7 +700,13 @@ def create_ai_provider(
     model: str,
 ) -> AIProvider:
     """Factory function to create the appropriate AI provider."""
-    from .const import AI_PROVIDER_OFFLINE, AI_PROVIDER_OPENAI, AI_PROVIDER_ANTHROPIC, AI_PROVIDER_GOOGLE
+    from .const import (
+        AI_PROVIDER_OFFLINE,
+        AI_PROVIDER_OPENAI,
+        AI_PROVIDER_ANTHROPIC,
+        AI_PROVIDER_GOOGLE,
+        AI_PROVIDER_GROQ,
+    )
 
     if provider == AI_PROVIDER_OPENAI:
         return OpenAIProvider(hass, api_key, model)
@@ -658,5 +714,7 @@ def create_ai_provider(
         return AnthropicProvider(hass, api_key, model)
     elif provider == AI_PROVIDER_GOOGLE:
         return GoogleAIProvider(hass, api_key, model)
+    elif provider == AI_PROVIDER_GROQ:
+        return GroqProvider(hass, api_key, model)
     else:
         return OfflineAIProvider()

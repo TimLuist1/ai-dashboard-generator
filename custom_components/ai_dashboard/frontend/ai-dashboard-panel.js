@@ -1263,21 +1263,17 @@ class AIDashboardPanel extends LitElement {
         >
           <div class="form-group">
             <label>KI-Anbieter</label>
-            <select name="ai_provider" class="form-control" @change=${(e) => {
-              this._settings = { ...this._settings, ai_provider: e.target.value };
-            }}>
-              <option value="offline" ?selected=${currentProvider === "offline"}>
-                🧮 Offline / Regelbasiert (Kein API-Key nötig)
-              </option>
-              <option value="openai" ?selected=${currentProvider === "openai"}>
-                🤖 OpenAI (GPT-4o)
-              </option>
-              <option value="anthropic" ?selected=${currentProvider === "anthropic"}>
-                🧠 Anthropic (Claude 3.5)
-              </option>
-              <option value="google" ?selected=${currentProvider === "google"}>
-                ✨ Google (Gemini 2.0)
-              </option>
+            <!-- .value binding guarantees the select shows the correct saved value after reload -->
+            <select name="ai_provider" class="form-control"
+              .value=${currentProvider}
+              @change=${(e) => {
+                this._settings = { ...this._settings, ai_provider: e.target.value };
+              }}>
+              <option value="offline">🧮 Offline / Regelbasiert (Kein API-Key nötig)</option>
+              <option value="openai">🤖 OpenAI (GPT-5.5 / GPT-5.4-mini)</option>
+              <option value="anthropic">🧠 Anthropic (Claude Opus 4.7 / Sonnet 4.6)</option>
+              <option value="google">✨ Google (Gemini 2.5 Flash / Pro)</option>
+              <option value="groq">⚡ Groq (Llama 4 / Llama 3.3 – kostenlos &amp; schnell)</option>
             </select>
           </div>
 
@@ -1290,30 +1286,45 @@ class AIDashboardPanel extends LitElement {
                     name="api_key"
                     class="form-control"
                     .value=${currentApiKey}
-                    placeholder="sk-... / claude-... / AIza..."
+                    placeholder="sk-... / claude-... / AIza... / gsk_..."
                     autocomplete="off"
                   />
                   <small>Wird verschlüsselt gespeichert. Nie geteilt.</small>
+                  ${currentProvider === "groq" ? html`
+                    <small style="display:block;margin-top:4px">
+                      Groq API-Key kostenlos auf
+                      <a href="https://console.groq.com/keys" target="_blank" rel="noopener">console.groq.com</a>
+                    </small>
+                  ` : nothing}
                 </div>
 
                 <div class="form-group">
                   <label>Modell</label>
-                  <select name="ai_model" class="form-control">
-                    ${currentProvider === "openai"
-                      ? html`
-                          <option value="gpt-4o-mini" ?selected=${currentModel === "gpt-4o-mini"}>GPT-4o Mini (schnell, günstig)</option>
-                          <option value="gpt-4o" ?selected=${currentModel === "gpt-4o"}>GPT-4o (beste Qualität)</option>
-                        `
-                      : currentProvider === "anthropic"
-                      ? html`
-                          <option value="claude-3-5-haiku-20241022" ?selected=${currentModel.includes("haiku")}>Claude 3.5 Haiku (schnell)</option>
-                          <option value="claude-3-5-sonnet-20241022" ?selected=${currentModel.includes("sonnet")}>Claude 3.5 Sonnet (beste Qualität)</option>
-                        `
+                  <select name="ai_model" class="form-control" .value=${currentModel}>
+                    ${currentProvider === "openai" ? html`
+                        <option value="gpt-4o-mini">GPT-4o Mini (bewährt, günstig)</option>
+                        <option value="gpt-4o">GPT-4o (bewährt, gut)</option>
+                        <option value="gpt-5.4-mini">GPT-5.4 Mini ✅ (neu, schnell &amp; günstig)</option>
+                        <option value="gpt-5.4">GPT-5.4 (neu, beste Qualität)</option>
+                        <option value="gpt-5.5">GPT-5.5 (neuestes Flaggschiff)</option>
+                      `
+                      : currentProvider === "anthropic" ? html`
+                        <option value="claude-haiku-4-5">Claude Haiku 4.5 (schnell, günstig)</option>
+                        <option value="claude-sonnet-4-6">Claude Sonnet 4.6 ✅ (empfohlen)</option>
+                        <option value="claude-opus-4-7">Claude Opus 4.7 (bestes Modell)</option>
+                      `
+                      : currentProvider === "groq" ? html`
+                        <option value="llama-3.1-8b-instant">Llama 3.1 8B (ultraschnell, kostenlos)</option>
+                        <option value="llama-3.3-70b-versatile">Llama 3.3 70B ✅ (empfohlen, gut &amp; kostenlos)</option>
+                        <option value="meta-llama/llama-4-scout-17b-16e-instruct">Llama 4 Scout 17B (Preview, sehr schnell)</option>
+                        <option value="openai/gpt-oss-20b">GPT OSS 20B (1000 TPS, ultraschnell)</option>
+                        <option value="openai/gpt-oss-120b">GPT OSS 120B (beste OSS-Qualität)</option>
+                      `
                       : html`
-                          <option value="gemini-2.5-flash-lite" ?selected=${currentModel.includes("flash-lite")}>Gemini 2.5 Flash-Lite (schnell & günstig)</option>
-                          <option value="gemini-2.5-flash" ?selected=${currentModel.includes("flash") && !currentModel.includes("lite") && !currentModel.includes("pro")}>Gemini 2.5 Flash (empfohlen)</option>
-                          <option value="gemini-2.5-pro" ?selected=${currentModel.includes("pro")}>Gemini 2.5 Pro (beste Qualität)</option>
-                        `}
+                        <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash-Lite (schnell &amp; günstig)</option>
+                        <option value="gemini-2.5-flash">Gemini 2.5 Flash ✅ (empfohlen)</option>
+                        <option value="gemini-2.5-pro">Gemini 2.5 Pro (beste Qualität)</option>
+                      `}
                   </select>
                 </div>
               `
@@ -1345,9 +1356,9 @@ class AIDashboardPanel extends LitElement {
 
           <div class="form-group">
             <label>Sprache</label>
-            <select name="language" class="form-control">
-              <option value="de" ?selected=${language === "de"}>🇩🇪 Deutsch</option>
-              <option value="en" ?selected=${language === "en"}>🇬🇧 English</option>
+            <select name="language" class="form-control" .value=${language}>
+              <option value="de">🇩🇪 Deutsch</option>
+              <option value="en">🇬🇧 English</option>
             </select>
           </div>
 
@@ -1397,6 +1408,7 @@ class AIDashboardPanel extends LitElement {
       openai: "mdi:robot",
       anthropic: "mdi:brain",
       google: "mdi:google",
+      groq: "mdi:lightning-bolt",
     };
     return icons[provider] || "mdi:robot";
   }
@@ -1405,9 +1417,10 @@ class AIDashboardPanel extends LitElement {
     const provider = this._settings.ai_provider || "offline";
     const names = {
       offline: "Offline / Regelbasiert",
-      openai: `OpenAI ${this._settings.ai_model || "GPT-4o-mini"}`,
-      anthropic: `Anthropic ${this._settings.ai_model || "Claude 3.5 Haiku"}`,
+      openai: `OpenAI ${this._settings.ai_model || "GPT-5.4-mini"}`,
+      anthropic: `Anthropic ${this._settings.ai_model || "Claude Sonnet 4.6"}`,
       google: `Google ${this._settings.ai_model || "Gemini 2.5 Flash"}`,
+      groq: `Groq ${this._settings.ai_model || "Llama 3.3 70B"}`,
     };
     return names[provider] || "Unbekannt";
   }
@@ -1419,6 +1432,7 @@ class AIDashboardPanel extends LitElement {
       openai: "Nutzt OpenAI GPT für intelligente Benennungen und Empfehlungen.",
       anthropic: "Nutzt Anthropic Claude für intelligente Analyse und Design-Vorschläge.",
       google: "Nutzt Google Gemini für schnelle, intelligente Dashboard-Generierung.",
+      groq: "Nutzt Groq's ultraschnelle Inferenz (bis 1000 t/s) – kostenloser Tier verfügbar.",
     };
     return descs[provider] || "";
   }

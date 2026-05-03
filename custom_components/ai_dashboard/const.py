@@ -1,7 +1,7 @@
 """Constants for AI Dashboard Generator."""
 
 DOMAIN = "ai_dashboard"
-VERSION = "2.1.0"
+VERSION = "2.2.0"
 
 PLATFORMS: list = []
 
@@ -22,27 +22,40 @@ AI_PROVIDER_OFFLINE = "offline"
 AI_PROVIDER_OPENAI = "openai"
 AI_PROVIDER_ANTHROPIC = "anthropic"
 AI_PROVIDER_GOOGLE = "google"
+AI_PROVIDER_GROQ = "groq"
 
 AI_PROVIDERS = {
     AI_PROVIDER_OFFLINE: "Offline / Regelbasiert (Keine API nötig)",
-    AI_PROVIDER_OPENAI: "OpenAI (GPT-4o-mini / GPT-4o)",
-    AI_PROVIDER_ANTHROPIC: "Anthropic (Claude 3.5 Sonnet)",
-    AI_PROVIDER_GOOGLE: "Google (Gemini 2.5 Flash)",
+    AI_PROVIDER_OPENAI: "OpenAI (GPT-5.5 / GPT-5.4-mini)",
+    AI_PROVIDER_ANTHROPIC: "Anthropic (Claude Opus 4.7 / Sonnet 4.6)",
+    AI_PROVIDER_GOOGLE: "Google (Gemini 2.5 Flash / Pro)",
+    AI_PROVIDER_GROQ: "Groq (Llama 4 / Llama 3.3 – kostenlos & schnell)",
 }
 
 AI_MODELS = {
     AI_PROVIDER_OPENAI: [
-        ("gpt-4o-mini", "GPT-4o Mini (schnell, günstig)"),
-        ("gpt-4o", "GPT-4o (beste Qualität)"),
+        ("gpt-4o-mini", "GPT-4o Mini (bewährt, günstig)"),
+        ("gpt-4o", "GPT-4o (bewährt, gut)"),
+        ("gpt-5.4-mini", "GPT-5.4 Mini ✅ (neu, schnell & günstig)"),
+        ("gpt-5.4", "GPT-5.4 (neu, beste Qualität)"),
+        ("gpt-5.5", "GPT-5.5 (neuestes Flaggschiff)"),
     ],
     AI_PROVIDER_ANTHROPIC: [
-        ("claude-3-5-haiku-20241022", "Claude 3.5 Haiku (schnell)"),
-        ("claude-3-5-sonnet-20241022", "Claude 3.5 Sonnet (beste Qualität)"),
+        ("claude-haiku-4-5", "Claude Haiku 4.5 (schnell, günstig)"),
+        ("claude-sonnet-4-6", "Claude Sonnet 4.6 ✅ (empfohlen, schnell & intelligent)"),
+        ("claude-opus-4-7", "Claude Opus 4.7 (bestes Modell, teurer)"),
     ],
     AI_PROVIDER_GOOGLE: [
         ("gemini-2.5-flash-lite", "Gemini 2.5 Flash-Lite (schnellste, günstigste)"),
         ("gemini-2.5-flash", "Gemini 2.5 Flash ✅ (empfohlen, stabil)"),
         ("gemini-2.5-pro", "Gemini 2.5 Pro (beste Qualität)"),
+    ],
+    AI_PROVIDER_GROQ: [
+        ("llama-3.1-8b-instant", "Llama 3.1 8B (ultraschnell, kostenlos)"),
+        ("llama-3.3-70b-versatile", "Llama 3.3 70B ✅ (empfohlen, gut & kostenlos)"),
+        ("meta-llama/llama-4-scout-17b-16e-instruct", "Llama 4 Scout 17B (Preview, sehr schnell)"),
+        ("openai/gpt-oss-20b", "GPT OSS 20B (1000 TPS, ultraschnell)"),
+        ("openai/gpt-oss-120b", "GPT OSS 120B (beste OSS-Qualität)"),
     ],
 }
 
