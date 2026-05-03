@@ -110,6 +110,7 @@ class AIDashboardPanel extends LitElement {
     this._showPreview = false;
     this._uploadingArea = null;
     this._statusInterval = null;
+    this._autoApplyAfterGenerate = false;
     // Assistant
     this._chatMessages = [];
     this._chatInput = "";
@@ -169,9 +170,23 @@ class AIDashboardPanel extends LitElement {
 
       if (wasGenerating && !this._generating) {
         if (result.status === "done") {
-          this._success = "Dashboard erfolgreich generiert! Klicke auf 'Anwenden'.";
+          const roomCount = this._areas.filter((a) => a.area_id !== "_unassigned").length;
+          if (this._autoApplyAfterGenerate) {
+            this._autoApplyAfterGenerate = false;
+            this._applying = true;
+            try {
+              await this.hass.callWS({ type: `${DOMAIN}/apply` });
+              this._success = `✅ ${roomCount + 1} Dashboards erstellt & angewendet! Öffne "AI Dashboard" in der Seitenleiste.`;
+            } catch (e) {
+              this._error = `Anwenden fehlgeschlagen: ${e.message || e}`;
+            }
+            this._applying = false;
+          } else {
+            this._success = `Dashboard generiert (1 Haupt + ${roomCount} Räume). Klicke auf "Anwenden".`;
+          }
           await this._loadPreview();
         } else if (result.status === "error") {
+          this._autoApplyAfterGenerate = false;
           this._error = `Fehler: ${result.error_message || "Unbekannter Fehler"}`;
         }
       }
@@ -222,13 +237,33 @@ class AIDashboardPanel extends LitElement {
     }
   }
 
+  async _handleGenerateAndApply() {
+    this._error = null;
+    this._success = null;
+    this._generating = true;
+    this._status = "generating";
+
+    try {
+      await this.hass.callWS({ type: `${DOMAIN}/generate`, options: {} });
+      // Wait briefly for generation to finish via event, then apply
+      // Generation result comes via HA event; _generating is reset in _listenForEvents.
+      // We chain apply after done in the event listener by setting a flag.
+      this._autoApplyAfterGenerate = true;
+    } catch (e) {
+      this._generating = false;
+      this._status = "error";
+      this._error = `Generierung fehlgeschlagen: ${e.message || e}`;
+    }
+  }
+
   async _handleApply() {
     this._applying = true;
     this._error = null;
+    const roomCount = this._areas.filter((a) => a.area_id !== "_unassigned").length;
 
     try {
       await this.hass.callWS({ type: `${DOMAIN}/apply` });
-      this._success = "✅ Dashboard erfolgreich angewendet! Öffne das neue Dashboard in der Seitenleiste.";
+      this._success = `✅ ${roomCount + 1} Dashboards angewendet! Haupt-Dashboard + ${roomCount} Raum-Dashboards. Öffne "AI Dashboard" in der Seitenleiste.`;
     } catch (e) {
       this._error = `Anwenden fehlgeschlagen: ${e.message || e}`;
     }
@@ -403,6 +438,8 @@ class AIDashboardPanel extends LitElement {
 
   _renderDashboardTab() {
     const hasDashboard = this._status === "done" || this._previewConfig;
+    const rooms = this._areas.filter((a) => a.area_id !== "_unassigned");
+    const roomCount = rooms.length;
     return html`
       <!-- Status Card -->
       <div class="card status-card">
@@ -412,7 +449,7 @@ class AIDashboardPanel extends LitElement {
         </div>
         <div class="status-grid">
           <div class="stat">
-            <span class="stat-value">${this._areas.filter((a) => a.area_id !== "_unassigned").length}</span>
+            <span class="stat-value">${roomCount}</span>
             <span class="stat-label">Räume</span>
           </div>
           <div class="stat">
@@ -435,6 +472,57 @@ class AIDashboardPanel extends LitElement {
           : nothing}
       </div>
 
+      <!-- Dashboard Architecture -->
+      <div class="card architecture-card">
+        <div class="card-header">
+          <ha-icon icon="mdi:view-dashboard-variant"></ha-icon>
+          <h2>Dashboard-Struktur</h2>
+        </div>
+        <p class="architecture-desc">
+          Die KI erstellt automatisch ein vollständiges Dashboard-System:
+        </p>
+        <div class="architecture-diagram">
+          <!-- Main dashboard -->
+          <div class="arch-main">
+            <ha-icon icon="mdi:home"></ha-icon>
+            <span class="arch-label">Haupt-Dashboard</span>
+            <span class="arch-sub">/ai-dashboard</span>
+          </div>
+          <!-- Arrow -->
+          <div class="arch-arrow-down">
+            <ha-icon icon="mdi:arrow-down-thin"></ha-icon>
+            <span>Navigations-Buttons für jeden Raum</span>
+          </div>
+          <!-- Room dashboards -->
+          <div class="arch-rooms">
+            ${roomCount > 0
+              ? rooms.slice(0, 6).map(
+                  (area) => html`
+                    <div class="arch-room">
+                      <ha-icon icon=${area.icon || "mdi:home-floor-1"}></ha-icon>
+                      <span>${area.name}</span>
+                    </div>
+                  `
+                )
+              : html`<div class="arch-room arch-room-placeholder">
+                  <ha-icon icon="mdi:home-floor-1"></ha-icon>
+                  <span>Raum 1</span>
+                </div>
+                <div class="arch-room arch-room-placeholder">
+                  <ha-icon icon="mdi:home-floor-2"></ha-icon>
+                  <span>Raum 2</span>
+                </div>
+                <div class="arch-room arch-room-placeholder">
+                  <ha-icon icon="mdi:home-floor-3"></ha-icon>
+                  <span>Raum 3</span>
+                </div>`}
+            ${roomCount > 6
+              ? html`<div class="arch-room arch-room-more">+${roomCount - 6} weitere</div>`
+              : nothing}
+          </div>
+        </div>
+      </div>
+
       <!-- AI Provider Info -->
       <div class="card ai-card">
         <div class="card-header">
@@ -454,12 +542,12 @@ class AIDashboardPanel extends LitElement {
       <div class="card generate-card">
         <div class="card-header">
           <ha-icon icon="mdi:magic-staff"></ha-icon>
-          <h2>${hasDashboard ? "Dashboard neu generieren" : "Dashboard erstellen"}</h2>
+          <h2>${hasDashboard ? "Dashboards neu generieren" : "Dashboards erstellen"}</h2>
         </div>
         <p class="generate-description">
           ${hasDashboard
-            ? "Erstellt ein neues Dashboard mit allen aktuellen Entities. Bestehende Konfiguration wird überschrieben."
-            : "Analysiert alle deine Entities und erstellt ein schönes, modernes Dashboard für jeden Raum."}
+            ? `Erstellt ${roomCount + 1} neue Dashboards (1 Haupt + ${roomCount} Räume) mit allen aktuellen Entities.`
+            : `Analysiert alle Entities und erstellt automatisch 1 Haupt-Dashboard + ${roomCount} Raum-Dashboards.`}
         </p>
         <div class="generate-steps">
           <div class="step ${this._generating ? "active" : hasDashboard ? "done" : ""}">
@@ -478,22 +566,40 @@ class AIDashboardPanel extends LitElement {
           <div class="step-divider"></div>
           <div class="step ${hasDashboard ? "done" : ""}">
             <div class="step-icon">
-              <ha-icon icon="mdi:view-dashboard-outline"></ha-icon>
+              <ha-icon icon="mdi:view-dashboard-variant"></ha-icon>
             </div>
-            <span>Dashboard erstellt</span>
+            <span>${roomCount + 1} Dashboards erstellt</span>
           </div>
         </div>
         <div class="button-row">
+          <!-- One-click: generate + apply -->
           <button
-            class="btn btn-primary ${this._generating ? "loading" : ""}"
+            class="btn btn-primary ${this._generating || this._applying ? "loading" : ""}"
+            @click=${this._handleGenerateAndApply}
+            ?disabled=${this._generating || this._applying}
+          >
+            ${this._generating
+              ? html`<ha-circular-progress active size="small"></ha-circular-progress>
+                  Generiere...`
+              : this._applying
+              ? html`<ha-circular-progress active size="small"></ha-circular-progress>
+                  Anwenden...`
+              : html`<ha-icon icon="mdi:creation"></ha-icon>
+                  ${hasDashboard ? "Alles neu erstellen & anwenden" : "Alles erstellen & anwenden"}`}
+          </button>
+        </div>
+        <div class="button-row button-row-secondary">
+          <!-- Manual: generate only -->
+          <button
+            class="btn btn-secondary ${this._generating ? "loading" : ""}"
             @click=${this._handleGenerate}
-            ?disabled=${this._generating}
+            ?disabled=${this._generating || this._applying}
           >
             ${this._generating
               ? html`<ha-circular-progress active size="small"></ha-circular-progress>
                   Generiere...`
               : html`<ha-icon icon="mdi:magic-staff"></ha-icon>
-                  ${hasDashboard ? "Neu generieren" : "Dashboard erstellen"}`}
+                  Nur generieren`}
           </button>
           ${hasDashboard
             ? html`<button
@@ -505,7 +611,7 @@ class AIDashboardPanel extends LitElement {
                   ? html`<ha-circular-progress active size="small"></ha-circular-progress>
                       Anwenden...`
                   : html`<ha-icon icon="mdi:check"></ha-icon>
-                      Auf Dashboard anwenden`}
+                      Nur anwenden`}
               </button>`
             : nothing}
           ${hasDashboard
@@ -517,10 +623,37 @@ class AIDashboardPanel extends LitElement {
                 }}
               >
                 <ha-icon icon="mdi:eye"></ha-icon>
-                ${this._showPreview ? "Vorschau verstecken" : "YAML Vorschau"}
+                ${this._showPreview ? "Vorschau verstecken" : "JSON Vorschau"}
               </button>`
             : nothing}
         </div>
+
+        ${hasDashboard
+          ? html`
+              <div class="dashboard-links">
+                <p><strong>Deine Dashboards nach dem Anwenden:</strong></p>
+                <div class="link-list">
+                  <a href="/ai-dashboard" target="_blank" class="dash-link">
+                    <ha-icon icon="mdi:home"></ha-icon>
+                    <span>Haupt-Dashboard <em>/ai-dashboard</em></span>
+                    <ha-icon icon="mdi:open-in-new"></ha-icon>
+                  </a>
+                  ${rooms.slice(0, 5).map(
+                    (area) => html`
+                      <a href="/ai-dashboard-${area.area_id}" target="_blank" class="dash-link dash-link-room">
+                        <ha-icon icon=${area.icon || "mdi:home-floor-1"}></ha-icon>
+                        <span>${area.name} <em>/ai-dashboard-${area.area_id}</em></span>
+                        <ha-icon icon="mdi:open-in-new"></ha-icon>
+                      </a>
+                    `
+                  )}
+                  ${rooms.length > 5
+                    ? html`<p class="more-links">... und ${rooms.length - 5} weitere Raum-Dashboards</p>`
+                    : nothing}
+                </div>
+              </div>
+            `
+          : nothing}
       </div>
 
       <!-- YAML Preview -->
@@ -553,7 +686,7 @@ class AIDashboardPanel extends LitElement {
           </li>
           <li>
             <ha-icon icon="mdi:refresh"></ha-icon>
-            Nach dem Hinzufügen neuer Geräte klicke auf "Neu generieren".
+            Nach dem Hinzufügen neuer Geräte klicke auf "Alles neu erstellen & anwenden".
           </li>
           <li>
             <ha-icon icon="mdi:image"></ha-icon>
@@ -1960,6 +2093,170 @@ class AIDashboardPanel extends LitElement {
 
       .info-list a {
         color: var(--primary-color);
+      }
+
+      /* Architecture diagram */
+      .architecture-desc {
+        color: var(--secondary-text-color);
+        margin: 0 0 16px;
+        font-size: 0.9rem;
+      }
+
+      .architecture-diagram {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .arch-main {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+        background: var(--primary-color);
+        color: #fff;
+        border-radius: 12px;
+        padding: 12px 24px;
+        min-width: 180px;
+      }
+
+      .arch-main ha-icon {
+        --mdc-icon-size: 28px;
+      }
+
+      .arch-label {
+        font-weight: 600;
+        font-size: 1rem;
+      }
+
+      .arch-sub {
+        font-size: 0.75rem;
+        opacity: 0.85;
+      }
+
+      .arch-arrow-down {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        color: var(--secondary-text-color);
+        font-size: 0.8rem;
+        gap: 2px;
+      }
+
+      .arch-arrow-down ha-icon {
+        --mdc-icon-size: 22px;
+      }
+
+      .arch-rooms {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        justify-content: center;
+        width: 100%;
+      }
+
+      .arch-room {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+        background: var(--secondary-background-color, #f5f5f5);
+        border: 1px solid var(--divider-color, #e0e0e0);
+        border-radius: 10px;
+        padding: 10px 16px;
+        font-size: 0.82rem;
+        color: var(--primary-text-color);
+        min-width: 90px;
+      }
+
+      .arch-room ha-icon {
+        --mdc-icon-size: 20px;
+        color: var(--primary-color);
+      }
+
+      .arch-room-placeholder {
+        opacity: 0.4;
+        border-style: dashed;
+      }
+
+      .arch-room-more {
+        align-self: center;
+        background: none;
+        border: none;
+        color: var(--secondary-text-color);
+        font-size: 0.85rem;
+      }
+
+      /* Dashboard links */
+      .dashboard-links {
+        margin-top: 16px;
+        padding-top: 16px;
+        border-top: 1px solid var(--divider-color, #e0e0e0);
+      }
+
+      .dashboard-links p {
+        margin: 0 0 8px;
+        font-size: 0.9rem;
+        color: var(--primary-text-color);
+      }
+
+      .link-list {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .dash-link {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        background: var(--secondary-background-color, #f5f5f5);
+        border-radius: 8px;
+        text-decoration: none;
+        color: var(--primary-text-color);
+        font-size: 0.88rem;
+        transition: background 0.15s;
+      }
+
+      .dash-link:hover {
+        background: var(--primary-color);
+        color: #fff;
+      }
+
+      .dash-link:hover ha-icon {
+        color: #fff;
+      }
+
+      .dash-link span {
+        flex: 1;
+      }
+
+      .dash-link em {
+        font-style: normal;
+        opacity: 0.6;
+        font-size: 0.78rem;
+        margin-left: 6px;
+      }
+
+      .dash-link-room {
+        margin-left: 20px;
+        font-size: 0.84rem;
+      }
+
+      .more-links {
+        color: var(--secondary-text-color);
+        font-size: 0.82rem;
+        margin: 4px 0 0 20px;
+      }
+
+      /* Secondary button row */
+      .button-row-secondary {
+        margin-top: 8px;
+        padding-top: 8px;
+        border-top: 1px solid var(--divider-color, #e0e0e0);
+        flex-wrap: wrap;
       }
 
       /* Unassigned Card */
