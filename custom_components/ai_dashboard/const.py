@@ -27,7 +27,7 @@ AI_PROVIDERS = {
     AI_PROVIDER_OFFLINE: "Offline / Regelbasiert (Keine API nötig)",
     AI_PROVIDER_OPENAI: "OpenAI (GPT-4o-mini / GPT-4o)",
     AI_PROVIDER_ANTHROPIC: "Anthropic (Claude 3.5 Sonnet)",
-    AI_PROVIDER_GOOGLE: "Google (Gemini 2.0 Flash)",
+    AI_PROVIDER_GOOGLE: "Google (Gemini 2.5 Flash)",
 }
 
 AI_MODELS = {
@@ -40,8 +40,9 @@ AI_MODELS = {
         ("claude-3-5-sonnet-20241022", "Claude 3.5 Sonnet (beste Qualität)"),
     ],
     AI_PROVIDER_GOOGLE: [
-        ("gemini-2.0-flash", "Gemini 2.0 Flash (schnell)"),
-        ("gemini-2.0-pro", "Gemini 2.0 Pro (beste Qualität)"),
+        ("gemini-2.5-flash-lite", "Gemini 2.5 Flash-Lite (schnellste, günstigste)"),
+        ("gemini-2.5-flash", "Gemini 2.5 Flash ✅ (empfohlen, stabil)"),
+        ("gemini-2.5-pro", "Gemini 2.5 Pro (beste Qualität)"),
     ],
 }
 
