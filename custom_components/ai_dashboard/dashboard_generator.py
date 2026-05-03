@@ -41,10 +41,15 @@ class DashboardGenerator:
         self.hass = hass
         self.config = config
         self.options = options
-        self.use_mushroom = options.get(CONF_USE_MUSHROOM, True)
-        self.language = options.get(CONF_LANGUAGE, "de")
-        self.title = config.get(CONF_DASHBOARD_TITLE, DEFAULT_DASHBOARD_TITLE)
-        self.url_path = config.get(CONF_DASHBOARD_URL_PATH, DASHBOARD_URL_PATH)
+        # AI settings live in options after the initial setup (options flow).
+        # Merge with options taking precedence so provider/key/model are always found.
+        self._cfg = {**config, **{k: v for k, v in options.items() if v is not None and v != ""}}
+        self.use_mushroom = self._cfg.get(CONF_USE_MUSHROOM, True)
+        self.language = self._cfg.get(CONF_LANGUAGE, "de")
+        self.title = self._cfg.get(CONF_DASHBOARD_TITLE, DEFAULT_DASHBOARD_TITLE)
+        self.url_path = self._cfg.get(CONF_DASHBOARD_URL_PATH, DASHBOARD_URL_PATH)
+        # Populated during async_generate – stores AI-generated design per area
+        self._ai_design: dict = {}
 
     async def async_generate(
         self,
@@ -293,7 +298,7 @@ class DashboardGenerator:
         if climate_section:
             sections.append(climate_section)
 
-        return {
+        view: dict = {
             "title": "Übersicht" if is_de else "Overview",
             "path": "overview",
             "icon": "mdi:home",
@@ -301,6 +306,13 @@ class DashboardGenerator:
             "max_columns": 4,
             "sections": sections,
         }
+
+        # Apply AI-generated background to overview
+        overview_bg = self._ai_design.get("overview_background")
+        if overview_bg:
+            view["background"] = overview_bg
+
+        return view
 
     def _build_header_section(self, areas_data: list[dict], ai_data: dict) -> dict:
         """Build the header section with greeting and weather."""
@@ -482,6 +494,7 @@ class DashboardGenerator:
         return {
             "type": "grid",
             "title": "Aktive Lichter" if self.language == "de" else "Active Lights",
+            "column_span": 2,
             "cards": [
                 {
                     "type": "custom:mushroom-chips-card",
@@ -524,7 +537,7 @@ class DashboardGenerator:
             "type": "grid",
             "title": "Heizung" if self.language == "de" else "Climate",
             "cards": cards,
-            "column_span": 4,
+            "column_span": 2,
         }
 
     # ─────────────────────────────────────────────────────────────
@@ -541,6 +554,11 @@ class DashboardGenerator:
         is_de = self.language == "de"
 
         view = self._build_area_view(area, ai_data, images, back_url=f"/{self.url_path}")
+
+        # Apply AI-generated background to room view
+        room_design = self._ai_design.get("rooms", {}).get(area_id, {})
+        if room_design.get("background"):
+            view["background"] = room_design["background"]
 
         return {
             "title": area_name,
@@ -617,6 +635,24 @@ class DashboardGenerator:
         # Header section with image and title
         header = self._build_area_header(area, area_ai, image_url)
         sections.append(header)
+
+        # ── AI-generated sections (if available) override rule-based layout ──
+        ai_room = self._ai_design.get("rooms", {}).get(area_id, {})
+        ai_sections = ai_room.get("sections", [])
+        if ai_sections:
+            ai_sections = self._validate_ai_sections(ai_sections, {e["entity_id"] for e in entities})
+
+        if ai_sections:
+            sections.extend(ai_sections)
+            return {
+                "title": area_name,
+                "path": area_id,
+                "icon": area_icon,
+                "type": "sections",
+                "max_columns": 4,
+                "sections": sections,
+                "id": area_id,
+            }
 
         # Group entities by domain
         lights = [e for e in entities if e["domain"] == "light"]
@@ -791,6 +827,7 @@ class DashboardGenerator:
             "type": "grid",
             "title": "Lichter" if is_de else "Lights",
             "cards": cards,
+            "column_span": 2,
         }
 
     def _build_climate_section(self, climate: list[dict], area_ai: dict) -> dict:
@@ -819,6 +856,7 @@ class DashboardGenerator:
             "type": "grid",
             "title": "Heizung / Klima" if is_de else "Climate",
             "cards": cards,
+            "column_span": 2,
         }
 
     def _build_media_section(self, media_players: list[dict], area_ai: dict) -> dict:
@@ -854,6 +892,7 @@ class DashboardGenerator:
             "type": "grid",
             "title": "Medien" if is_de else "Media",
             "cards": cards,
+            "column_span": 2,
         }
 
     def _build_covers_section(self, covers: list[dict], area_ai: dict) -> dict:
@@ -883,6 +922,7 @@ class DashboardGenerator:
             "type": "grid",
             "title": "Rollos / Jalousien" if is_de else "Covers & Blinds",
             "cards": cards,
+            "column_span": 2,
         }
 
     def _build_switches_section(self, switches: list[dict], area_ai: dict) -> dict:
@@ -911,6 +951,7 @@ class DashboardGenerator:
             "type": "grid",
             "title": "Schalter" if is_de else "Switches",
             "cards": cards,
+            "column_span": 2,
         }
 
     def _build_sensors_section(
@@ -982,6 +1023,7 @@ class DashboardGenerator:
             "type": "grid",
             "title": "Sensoren" if is_de else "Sensors",
             "cards": cards,
+            "column_span": 2,
         }
 
     def _build_cameras_section(self, cameras: list[dict], area_ai: dict) -> dict:
@@ -1068,6 +1110,7 @@ class DashboardGenerator:
             "type": "grid",
             "title": "Geräte" if is_de else "Appliances",
             "cards": cards,
+            "column_span": 2,
         }
 
     def _build_controls_section(self, others: list[dict], area_ai: dict) -> dict:
@@ -1106,6 +1149,7 @@ class DashboardGenerator:
             "type": "grid",
             "title": "Steuerung" if is_de else "Controls",
             "cards": cards,
+            "column_span": 1,
         }
 
     # ─────────────────────────────────────────────────────────────
@@ -1116,9 +1160,9 @@ class DashboardGenerator:
         """Get AI enrichment for entities."""
         from .ai_provider import create_ai_provider
 
-        provider_name = self.config.get(CONF_AI_PROVIDER, AI_PROVIDER_OFFLINE)
-        api_key = self.config.get(CONF_API_KEY, "")
-        model = self.config.get(CONF_AI_MODEL, "")
+        provider_name = self._cfg.get(CONF_AI_PROVIDER, AI_PROVIDER_OFFLINE)
+        api_key = self._cfg.get(CONF_API_KEY, "")
+        model = self._cfg.get(CONF_AI_MODEL, "")
 
         provider = create_ai_provider(self.hass, provider_name, api_key, model)
 
@@ -1127,6 +1171,13 @@ class DashboardGenerator:
         try:
             entity_data = await provider.async_analyze_entities(areas_data, self.language)
             hints_data = await provider.async_generate_dashboard_hints(areas_data, self.language)
+
+            # Also request a full dashboard design (non-blocking – {} means fallback)
+            self._ai_design = await provider.async_generate_dashboard_design(areas_data, self.language)
+            _LOGGER.debug(
+                "AI design generated for %d rooms",
+                len(self._ai_design.get("rooms", {})),
+            )
 
             # Merge into a unified dict keyed by area_id
             result = {}
@@ -1142,6 +1193,43 @@ class DashboardGenerator:
         except Exception as err:  # pylint: disable=broad-except
             _LOGGER.warning("AI enrichment failed: %s – using defaults", err)
             return {}
+
+    def _validate_ai_sections(
+        self, sections: list[dict], valid_entity_ids: set[str]
+    ) -> list[dict]:
+        """Validate and clean AI-generated sections.
+
+        - Remove cards referencing entity IDs not in our data (AI hallucinations).
+        - Clamp column_span to 1–4.
+        - Ensure fill_container on mushroom cards.
+        """
+        cleaned: list[dict] = []
+        for section in sections:
+            if not isinstance(section, dict):
+                continue
+            cards = section.get("cards", [])
+            valid_cards = []
+            for card in cards:
+                if not isinstance(card, dict):
+                    continue
+                entity_id = card.get("entity")
+                if entity_id and entity_id not in valid_entity_ids:
+                    _LOGGER.debug("AI section: dropping hallucinated entity %s", entity_id)
+                    continue
+                # Ensure fill_container on mushroom cards
+                if isinstance(card.get("type"), str) and "mushroom" in card["type"]:
+                    card = {**card, "fill_container": True}
+                valid_cards.append(card)
+
+            if not valid_cards:
+                continue
+
+            col_span = section.get("column_span", 2)
+            if not isinstance(col_span, int) or not (1 <= col_span <= 4):
+                col_span = 2
+
+            cleaned.append({**section, "cards": valid_cards, "column_span": col_span})
+        return cleaned
 
     def _get_entity_name(self, entity: dict, area_ai: dict) -> str:
         """Get the best name for an entity."""

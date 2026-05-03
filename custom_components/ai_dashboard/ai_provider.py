@@ -34,6 +34,33 @@ class AIProvider(ABC):
     ) -> dict:
         """Generate high-level dashboard hints (room descriptions, colors)."""
 
+    @abstractmethod
+    async def async_generate_dashboard_design(
+        self, areas_data: list[dict], language: str = "de"
+    ) -> dict:
+        """Generate a complete Lovelace dashboard design per room.
+
+        Returns a dict with structure:
+        {
+          "overview_background": "<css background>",
+          "rooms": {
+            "<area_id>": {
+              "icon": "mdi:...",
+              "background": "<css background>",
+              "sections": [
+                {
+                  "title": "...",
+                  "column_span": 2,
+                  "cards": [...mushroom card dicts...]
+                }
+              ]
+            }
+          }
+        }
+
+        Return {} to signal "use rule-based fallback".
+        """
+
 
 class OfflineAIProvider(AIProvider):
     """Rule-based offline AI provider - no API key required."""
@@ -109,6 +136,12 @@ class OfflineAIProvider(AIProvider):
             if key in name_lower:
                 return color
         return "blue-grey"
+
+    async def async_generate_dashboard_design(
+        self, areas_data: list[dict], language: str = "de"
+    ) -> dict:
+        """Offline provider has no AI design capability."""
+        return {}
 
     def _get_area_subtitle(self, area: dict, language: str) -> str:
         """Generate a subtitle for an area."""
@@ -194,6 +227,18 @@ class OpenAIProvider(AIProvider):
             offline = OfflineAIProvider()
             return await offline.async_generate_dashboard_hints(areas_data, language)
 
+    async def async_generate_dashboard_design(
+        self, areas_data: list[dict], language: str = "de"
+    ) -> dict:
+        """Generate complete dashboard design via GPT."""
+        prompt = self._build_design_prompt(areas_data, language)
+        try:
+            response_text = await self._async_call_api(prompt, max_tokens=6000)
+            return self._parse_json_response(response_text)
+        except Exception as err:  # pylint: disable=broad-except
+            _LOGGER.warning("OpenAI design generation failed: %s – using rule-based layout", err)
+            return {}
+
     def _build_analysis_prompt(self, areas_data: list[dict], language: str) -> str:
         """Build the entity analysis prompt."""
         lang_instruction = (
@@ -264,7 +309,98 @@ Antworte NUR mit validem JSON:
   }}
 }}"""
 
-    async def _async_call_api(self, prompt: str) -> str:
+    def _build_design_prompt(self, areas_data: list[dict], language: str) -> str:
+        """Build the complete dashboard design prompt."""
+        is_de = language == "de"
+        instruction = "auf Deutsch" if is_de else "in English"
+
+        # Build compact entity list per room
+        rooms_data: dict = {}
+        for area in areas_data:
+            if area["area_id"] == "_unassigned":
+                continue
+            entities_list = []
+            for entity in area.get("entities", [])[:25]:
+                entities_list.append({
+                    "entity_id": entity["entity_id"],
+                    "domain": entity["domain"],
+                    "name": entity.get("suggested_name") or entity.get("friendly_name", ""),
+                    "device_class": entity.get("device_class"),
+                })
+            if entities_list:
+                rooms_data[area["area_id"]] = {
+                    "name": area["name"],
+                    "entities": entities_list,
+                }
+
+        rooms_json = json.dumps(rooms_data, ensure_ascii=False, indent=2)
+
+        return f"""Du bist ein professioneller Home Assistant Dashboard Designer. Erstelle für jeden Raum ein wunderschönes, modernes Dashboard {instruction}.
+
+RÄUME UND ENTITIES:
+{rooms_json}
+
+DESIGN-REGELN:
+1. Verwende NUR diese Mushroom Card Typen mit genau diesen Feldern:
+   - custom:mushroom-light-card: entity, name, icon, icon_color, show_brightness_control(bool), show_color_temp_control(bool), collapsible_controls(bool), fill_container(bool)
+   - custom:mushroom-entity-card: entity, name, icon, icon_color, tap_action({{"action":"toggle"}}), fill_container(bool)
+   - custom:mushroom-climate-card: entity, name, show_temperature_control(bool), collapsible_controls(bool), fill_container(bool)
+   - custom:mushroom-media-player-card: entity, name, collapsible_controls(bool), fill_container(bool)
+   - custom:mushroom-cover-card: entity, name, show_position_control(bool), fill_container(bool)
+   - custom:mushroom-title-card: title, subtitle
+   - custom:mushroom-template-card: primary(Jinja2 string), secondary(Jinja2 string), icon, icon_color, tap_action
+   - custom:mushroom-chips-card: chips(list) — ideal für kompakten Status auf Handys
+2. WICHTIG: Nur entity_ids aus der obigen Liste verwenden – KEINE erfundenen Entity-IDs!
+3. icon_color Werte: red, pink, purple, indigo, blue, cyan, teal, green, yellow, amber, orange, grey
+4. TABLET & HANDY LAYOUT (max_columns: 4 auf Tablet; auf Handys stapeln sich Sections automatisch):
+   - column_span: 4 → NUR für mushroom-title-card / reine Header-Sections (volle Breite)
+   - column_span: 2 → für alle Steuerungs-Sections (Lichter, Klima, Medien, Rollläden) – halbe Tablet-Breite, volle Handy-Breite
+   - column_span: 1 → NUR für Sections mit 1–2 kleinen Status-Karten (niemals Steuerung!)
+   - MAXIMAL 4 Karten pro Section (mehr = zu viel Scrollen auf dem Handy)
+   - IMMER fill_container: true auf jeder Karte
+   - collapsible_controls: true auf Licht-, Klima- und Medienkarten – spart Höhe auf dem Handy
+5. Hintergrund pro Raum (CSS gradient, dunkel = modern):
+   Wohnzimmer → "linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)"
+   Schlafzimmer → "linear-gradient(135deg, #0f0c29 0%, #24243e 100%)"
+   Küche → "linear-gradient(135deg, #134E5E 0%, #71B280 100%)"
+   Bad → "linear-gradient(135deg, #1c3a5c 0%, #1a6da8 100%)"
+   Büro → "linear-gradient(135deg, #1e3c72 0%, #2a5298 100%)"
+   Kinderzimmer → "linear-gradient(135deg, #ee0979 0%, #ff6a00 100%)"
+   Garten → "linear-gradient(135deg, #134e5e 0%, #71b280 100%)"
+   Flur/Keller → "linear-gradient(135deg, #232526 0%, #414345 100%)"
+   Sonstige → "linear-gradient(135deg, #373b44 0%, #4286f4 100%)"
+
+Antworte NUR mit validem JSON (kein Markdown, keine Kommentare):
+{{
+  "overview_background": "linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)",
+  "rooms": {{
+    "AREA_ID": {{
+      "icon": "mdi:sofa",
+      "background": "linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)",
+      "sections": [
+        {{
+          "title": "Beleuchtung",
+          "column_span": 2,
+          "cards": [
+            {{
+              "type": "custom:mushroom-light-card",
+              "entity": "ENTITY_ID_AUS_LISTE",
+              "name": "Deckenlampe",
+              "icon": "mdi:ceiling-light",
+              "icon_color": "amber",
+              "show_brightness_control": true,
+              "show_color_temp_control": true,
+              "collapsible_controls": true,
+              "fill_container": true
+            }}
+          ]
+        }}
+      ]
+    }}
+  }}
+}}"""
+
+    async def _async_call_api(self, prompt: str, max_tokens: int = 2000) -> str:
         """Call the OpenAI API."""
         session = async_get_clientsession(self.hass)
         async with session.post(
@@ -282,11 +418,11 @@ Antworte NUR mit validem JSON:
                     },
                     {"role": "user", "content": prompt},
                 ],
-                "max_tokens": 2000,
-                "temperature": 0.3,
+                "max_tokens": max_tokens,
+                "temperature": 0.5,
                 "response_format": {"type": "json_object"},
             },
-            timeout=30,
+            timeout=60,
         ) as resp:
             if resp.status != 200:
                 error_text = await resp.text()
@@ -368,7 +504,20 @@ class AnthropicProvider(AIProvider):
             offline = OfflineAIProvider()
             return await offline.async_generate_dashboard_hints(areas_data, language)
 
-    async def _async_call_api(self, prompt: str) -> str:
+    async def async_generate_dashboard_design(
+        self, areas_data: list[dict], language: str = "de"
+    ) -> dict:
+        """Generate complete dashboard design via Claude."""
+        openai_provider = OpenAIProvider(self.hass, self.api_key, self.model)
+        prompt = openai_provider._build_design_prompt(areas_data, language)
+        try:
+            response_text = await self._async_call_api(prompt, max_tokens=6000)
+            return openai_provider._parse_json_response(response_text)
+        except Exception as err:  # pylint: disable=broad-except
+            _LOGGER.warning("Anthropic design generation failed: %s – using rule-based layout", err)
+            return {}
+
+    async def _async_call_api(self, prompt: str, max_tokens: int = 2000) -> str:
         """Call the Anthropic API."""
         session = async_get_clientsession(self.hass)
         async with session.post(
@@ -381,10 +530,10 @@ class AnthropicProvider(AIProvider):
             json={
                 "model": self.model,
                 "messages": [{"role": "user", "content": prompt}],
-                "max_tokens": 2000,
+                "max_tokens": max_tokens,
                 "system": "You are a Home Assistant dashboard expert. Always respond with valid JSON only.",
             },
-            timeout=30,
+            timeout=60,
         ) as resp:
             if resp.status != 200:
                 error_text = await resp.text()
@@ -451,7 +600,20 @@ class GoogleAIProvider(AIProvider):
             offline = OfflineAIProvider()
             return await offline.async_generate_dashboard_hints(areas_data, language)
 
-    async def _async_call_api(self, prompt: str) -> str:
+    async def async_generate_dashboard_design(
+        self, areas_data: list[dict], language: str = "de"
+    ) -> dict:
+        """Generate complete dashboard design via Gemini."""
+        openai_provider = OpenAIProvider(self.hass, self.api_key, self.model)
+        prompt = openai_provider._build_design_prompt(areas_data, language)
+        try:
+            response_text = await self._async_call_api(prompt, max_tokens=8192)
+            return openai_provider._parse_json_response(response_text)
+        except Exception as err:  # pylint: disable=broad-except
+            _LOGGER.warning("Google AI design generation failed: %s – using rule-based layout", err)
+            return {}
+
+    async def _async_call_api(self, prompt: str, max_tokens: int = 2000) -> str:
         """Call the Google Gemini API."""
         session = async_get_clientsession(self.hass)
         url = self.API_URL.format(model=self.model)
@@ -460,8 +622,8 @@ class GoogleAIProvider(AIProvider):
             json={
                 "contents": [{"parts": [{"text": prompt}]}],
                 "generationConfig": {
-                    "maxOutputTokens": 2000,
-                    "temperature": 0.3,
+                    "maxOutputTokens": max_tokens,
+                    "temperature": 0.5,
                     "responseMimeType": "application/json",
                 },
                 "systemInstruction": {
@@ -472,7 +634,7 @@ class GoogleAIProvider(AIProvider):
                     ]
                 },
             },
-            timeout=30,
+            timeout=60,
         ) as resp:
             if resp.status != 200:
                 error_text = await resp.text()
