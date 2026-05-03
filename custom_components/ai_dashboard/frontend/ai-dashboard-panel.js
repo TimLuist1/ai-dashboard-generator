@@ -1177,8 +1177,9 @@ class AIDashboardPanel extends LitElement {
                           <option value="claude-3-5-sonnet-20241022" ?selected=${currentModel.includes("sonnet")}>Claude 3.5 Sonnet (beste Qualität)</option>
                         `
                       : html`
-                          <option value="gemini-2.0-flash" ?selected=${currentModel.includes("flash")}>Gemini 2.0 Flash (schnell)</option>
-                          <option value="gemini-2.0-pro" ?selected=${currentModel.includes("pro")}>Gemini 2.0 Pro (beste Qualität)</option>
+                          <option value="gemini-2.5-flash-lite" ?selected=${currentModel.includes("flash-lite")}>Gemini 2.5 Flash-Lite (schnell & günstig)</option>
+                          <option value="gemini-2.5-flash" ?selected=${currentModel.includes("flash") && !currentModel.includes("lite") && !currentModel.includes("pro")}>Gemini 2.5 Flash (empfohlen)</option>
+                          <option value="gemini-2.5-pro" ?selected=${currentModel.includes("pro")}>Gemini 2.5 Pro (beste Qualität)</option>
                         `}
                   </select>
                 </div>
@@ -1273,7 +1274,7 @@ class AIDashboardPanel extends LitElement {
       offline: "Offline / Regelbasiert",
       openai: `OpenAI ${this._settings.ai_model || "GPT-4o-mini"}`,
       anthropic: `Anthropic ${this._settings.ai_model || "Claude 3.5 Haiku"}`,
-      google: `Google ${this._settings.ai_model || "Gemini 2.0 Flash"}`,
+      google: `Google ${this._settings.ai_model || "Gemini 2.5 Flash"}`,
     };
     return names[provider] || "Unbekannt";
   }

@@ -252,6 +252,58 @@ TOOL_DEFINITIONS: list[dict] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "set_entity_visibility",
+            "description": (
+                "Blendet eine oder mehrere Entities in der HA-Oberfläche aus oder wieder ein. "
+                "'hidden=true' versteckt sie überall (Dashboard, Lovelace, Companion App). "
+                "Damit kannst du das Dashboard aufräumen, z.B. technische Sensoren verstecken."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "entity_ids": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Liste der Entity-IDs (z.B. ['sensor.rssi_kueche', 'sensor.uptime'])",
+                    },
+                    "hidden": {
+                        "type": "boolean",
+                        "description": "true = ausblenden, false = wieder einblenden",
+                    },
+                },
+                "required": ["entity_ids", "hidden"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "set_entity_disabled",
+            "description": (
+                "Deaktiviert oder reaktiviert Entities vollständig in HA. "
+                "Deaktivierte Entities senden keine Updates mehr und erscheinen nirgends. "
+                "Sinnvoll für Entities die dauerhaft nicht benötigt werden."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "entity_ids": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Liste der Entity-IDs",
+                    },
+                    "disabled": {
+                        "type": "boolean",
+                        "description": "true = deaktivieren, false = reaktivieren",
+                    },
+                },
+                "required": ["entity_ids", "disabled"],
+            },
+        },
+    },
 ]
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -304,6 +356,8 @@ class HAToolExecutor:
             "rename_entity",
             "assign_area",
             "generate_dashboard",
+            "set_entity_visibility",
+            "set_entity_disabled",
         }
     )
 
@@ -573,3 +627,61 @@ class HAToolExecutor:
             "count": len(results),
             "entities": results[:50],  # cap to avoid huge responses
         }
+
+    async def _tool_set_entity_visibility(self, args: dict) -> dict:
+        entity_reg = er.async_get(self.hass)
+        entity_ids: list[str] = args["entity_ids"]
+        hidden: bool = bool(args["hidden"])
+
+        from homeassistant.helpers.entity_registry import RegistryEntryHider
+
+        updated = []
+        not_found = []
+        for eid in entity_ids:
+            entry = entity_reg.async_get(eid)
+            if not entry:
+                not_found.append(eid)
+                continue
+            if hidden:
+                entity_reg.async_update_entity(
+                    eid,
+                    hidden_by=RegistryEntryHider.USER,
+                )
+            else:
+                entity_reg.async_update_entity(eid, hidden_by=None)
+            updated.append(eid)
+
+        action = "ausgeblendet" if hidden else "eingeblendet"
+        msg = f"{len(updated)} Entit{'y' if len(updated)==1 else 'ies'} {action}."
+        if not_found:
+            msg += f" Nicht gefunden: {', '.join(not_found)}."
+        return {"success": True, "message": msg, "updated": updated, "not_found": not_found}
+
+    async def _tool_set_entity_disabled(self, args: dict) -> dict:
+        entity_reg = er.async_get(self.hass)
+        entity_ids: list[str] = args["entity_ids"]
+        disabled: bool = bool(args["disabled"])
+
+        from homeassistant.helpers.entity_registry import RegistryEntryDisabler
+
+        updated = []
+        not_found = []
+        for eid in entity_ids:
+            entry = entity_reg.async_get(eid)
+            if not entry:
+                not_found.append(eid)
+                continue
+            if disabled:
+                entity_reg.async_update_entity(
+                    eid,
+                    disabled_by=RegistryEntryDisabler.USER,
+                )
+            else:
+                entity_reg.async_update_entity(eid, disabled_by=None)
+            updated.append(eid)
+
+        action = "deaktiviert" if disabled else "reaktiviert"
+        msg = f"{len(updated)} Entit{'y' if len(updated)==1 else 'ies'} {action}."
+        if not_found:
+            msg += f" Nicht gefunden: {', '.join(not_found)}."
+        return {"success": True, "message": msg, "updated": updated, "not_found": not_found}

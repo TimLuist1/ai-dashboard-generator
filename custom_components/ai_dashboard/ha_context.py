@@ -138,9 +138,16 @@ class HAContextBuilder:
         ]
 
         # ── HA Config ──────────────────────────────────────────────
+        # hass.config.units.name was removed in HA 2024.x; use system string
+        units = self.hass.config.units
+        unit_system_name = (
+            getattr(units, "name", None)
+            or getattr(units, "SYSTEM_METRIC", None)
+            or ("metric" if getattr(units, "is_metric", True) else "imperial")
+        )
         config_info = {
             "location_name": self.hass.config.location_name,
-            "unit_system": self.hass.config.units.name,
+            "unit_system": unit_system_name,
             "time_zone": str(self.hass.config.time_zone),
             "country": getattr(self.hass.config, "country", None),
             "language": getattr(self.hass.config, "language", "de"),
