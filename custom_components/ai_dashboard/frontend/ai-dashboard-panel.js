@@ -1217,7 +1217,7 @@ class AIDashboardPanel extends LitElement {
     const currentProvider = this._settings.ai_provider || "groq";
     const currentModel = this._settings.ai_model || "";
     const currentApiKey = this._settings.api_key || "";
-    const currentBaseUrl = this._settings.base_url || "https://aiprimetech.io/v1";
+    const currentBaseUrl = this._settings.base_url || "https://aiprimetech.io";
     const useMushroom = this._settings.use_mushroom !== false;
     const language = this._settings.language || "de";
     const dashboardTitle = this._settings.dashboard_title || "AI Dashboard";
@@ -1287,7 +1287,7 @@ class AIDashboardPanel extends LitElement {
                 name="base_url"
                 class="form-control"
                 .value=${currentBaseUrl}
-                placeholder="https://aiprimetech.io/v1"
+                placeholder="https://aiprimetech.io"
               />
               <small>OpenAI-kompatibler Endpunkt. Hinweis: /v1 wird automatisch hinzugefügt falls nicht vorhanden</small>
             </div>

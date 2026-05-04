@@ -333,8 +333,13 @@ Antworte NUR mit validem JSON (kein Markdown, keine Kommentare):
                         continue
                     if resp.status != 200:
                         error_text = await resp.text()
+                        # Retry on temporary server errors
+                        if resp.status in (502, 503, 504):
+                            _LOGGER.warning("Server error %d (attempt %d/3): %s", resp.status, attempt + 1, error_text[:100])
+                            await asyncio.sleep(2)
+                            continue
                         raise ValueError(f"OpenAI API error {resp.status}: {error_text[:200]}")
-                    data = await resp.json()
+                    data = await resp.json(content_type=None)
                     return data["choices"][0]["message"]["content"]
             except asyncio.TimeoutError:
                 last_error = asyncio.TimeoutError("API request timed out")
@@ -615,15 +620,7 @@ class OpenCodeProvider(OpenAIProvider):
         self.api_key = api_key
         self.model = model or "anthropic"
         
-        # Process base_url: ensure it ends with /v1
-        if base_url:
-            base_url = base_url.rstrip("/")
-            # Auto-add /v1 if not already present
-            if not base_url.endswith("/v1"):
-                base_url = f"{base_url}/v1"
-            self._base_url = base_url
-        else:
-            self._base_url = "https://aiprimetech.io/v1"
+        self._base_url = base_url.rstrip("/") if base_url else "https://aiprimetech.io"
 
     @property
     def API_URL(self) -> str:
@@ -638,7 +635,7 @@ class OpenCodeProvider(OpenAIProvider):
             # First, check if endpoint is reachable at all
             try:
                 async with session.head(
-                    self.API_URL.replace("/chat/completions", ""),
+                    self._base_url,
                     timeout=5,
                 ) as head_resp:
                     if head_resp.status not in (200, 405, 404):

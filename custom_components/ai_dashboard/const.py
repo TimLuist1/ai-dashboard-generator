@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 DOMAIN = "ai_dashboard"
-VERSION = "2.3.7"
+VERSION = "2.3.8"
 
 PLATFORMS: list[str] = []
 
@@ -20,7 +20,7 @@ CONF_LANGUAGE = "language"
 CONF_BASE_URL = "base_url"
 
 # OpenCode.ai default base URL
-OPENCODE_DEFAULT_BASE_URL = "https://aiprimetech.io/v1"
+OPENCODE_DEFAULT_BASE_URL = "https://aiprimetech.io"
 
 # AI Provider options
 AI_PROVIDER_OPENAI = "openai"

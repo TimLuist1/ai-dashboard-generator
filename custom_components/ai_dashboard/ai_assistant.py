@@ -334,10 +334,6 @@ class AIAssistant:
             api_url = "https://api.groq.com/openai/v1/chat/completions"
         elif self.provider == AI_PROVIDER_OPENCODE:
             base = (self.base_url or OPENCODE_DEFAULT_BASE_URL).rstrip("/")
-            # Auto-append /v1 if not present so both "https://aiprimetech.io"
-            # and "https://aiprimetech.io/v1" work correctly.
-            if not base.endswith("/v1"):
-                base = f"{base}/v1"
             api_url = f"{base}/chat/completions"
 
         async with session.post(
@@ -358,10 +354,18 @@ class AIAssistant:
         ) as resp:
             if resp.status != 200:
                 provider_label = self.provider.capitalize() if self.provider else "AI"
+                error_text = await resp.text()
+                # Friendly message for OpenCode capacity issues
+                if self.provider == "opencode" and resp.status in (503, 502, 500):
+                    if "No available accounts" in error_text or "account" in error_text.lower():
+                        raise ValueError(
+                            "OpenCode.ai hat momentan keine verfügbaren Kapazitäten. "
+                            "Bitte versuche es in einigen Minuten erneut oder wechsle den Anbieter (z.B. Groq)."
+                        )
                 raise ValueError(
-                    f"{provider_label} Fehler {resp.status}: {(await resp.text())[:200]}"
+                    f"{provider_label} Fehler {resp.status}: {error_text[:200]}"
                 )
-            data = await resp.json()
+            data = await resp.json(content_type=None)
 
         message = data["choices"][0]["message"]
         result: dict[str, Any] = {"content": message.get("content") or ""}
