@@ -365,7 +365,13 @@ class AIAssistant:
                 raise ValueError(
                     f"{provider_label} Fehler {resp.status}: {error_text[:200]}"
                 )
-            data = await resp.json(content_type=None)
+            raw = await resp.text()
+            if not raw or not raw.strip():
+                raise ValueError("Leere Antwort vom KI-Server erhalten")
+            try:
+                data = json.loads(raw)
+            except json.JSONDecodeError as e:
+                raise ValueError(f"Ungültige JSON-Antwort: {raw[:200]}") from e
 
         message = data["choices"][0]["message"]
         result: dict[str, Any] = {"content": message.get("content") or ""}
