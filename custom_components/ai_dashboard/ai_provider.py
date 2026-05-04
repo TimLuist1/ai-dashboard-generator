@@ -614,7 +614,16 @@ class OpenCodeProvider(OpenAIProvider):
         self.hass = hass
         self.api_key = api_key
         self.model = model or "anthropic"
-        self._base_url = base_url.rstrip("/") if base_url else "https://aiprimetech.io/v1"
+        
+        # Process base_url: ensure it ends with /v1
+        if base_url:
+            base_url = base_url.rstrip("/")
+            # Auto-add /v1 if not already present
+            if not base_url.endswith("/v1"):
+                base_url = f"{base_url}/v1"
+            self._base_url = base_url
+        else:
+            self._base_url = "https://aiprimetech.io/v1"
 
     @property
     def API_URL(self) -> str:

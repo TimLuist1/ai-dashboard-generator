@@ -1,7 +1,7 @@
 {
   "domain": "ai_dashboard",
   "name": "AI Dashboard Generator",
-  "version": "2.3.5",
+  "version": "2.3.6",
   "documentation": "https://github.com/TimLuist1/ai-dashboard-generator",
   "issue_tracker": "https://github.com/TimLuist1/ai-dashboard-generator/issues",
   "codeowners": ["@TimLuist1"],

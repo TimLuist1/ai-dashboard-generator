@@ -1289,7 +1289,7 @@ class AIDashboardPanel extends LitElement {
                 .value=${currentBaseUrl}
                 placeholder="https://aiprimetech.io/v1"
               />
-              <small>OpenAI-kompatibler Endpunkt (z.B. aiprimetech.io)</small>
+              <small>OpenAI-kompatibler Endpunkt. Hinweis: /v1 wird automatisch hinzugefügt falls nicht vorhanden</small>
             </div>
           ` : nothing}
 
