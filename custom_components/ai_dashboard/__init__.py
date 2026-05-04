@@ -49,7 +49,9 @@ from .const import (  # noqa: E402
 )
 
 import voluptuous as vol
+from homeassistant.components import frontend, websocket_api
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers.storage import Store
 
 _LOGGER = logging.getLogger(__name__)
 

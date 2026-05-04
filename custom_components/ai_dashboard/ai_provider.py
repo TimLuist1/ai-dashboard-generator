@@ -1,6 +1,6 @@
 """AI provider module for AI Dashboard Generator.
 
-Supports: Offline (rule-based), OpenAI, Anthropic, Google Gemini, Groq.
+Supports: OpenAI, Anthropic, Google Gemini, Groq, OpenCode.ai.
 """
 from __future__ import annotations
 
@@ -625,6 +625,23 @@ class OpenCodeProvider(OpenAIProvider):
         """Test API connection."""
         try:
             session = _get_session(self.hass)
+            
+            # First, check if endpoint is reachable at all
+            try:
+                async with session.head(
+                    self.API_URL.replace("/chat/completions", ""),
+                    timeout=5,
+                ) as head_resp:
+                    if head_resp.status not in (200, 405, 404):
+                        _LOGGER.warning(
+                            "OpenCode endpoint unreachable (status %d). Check base URL: %s",
+                            head_resp.status,
+                            self.API_URL,
+                        )
+            except Exception as e:
+                _LOGGER.warning("OpenCode endpoint check failed: %s", e)
+            
+            # Now test with auth
             async with session.post(
                 self.API_URL,
                 headers={
@@ -641,19 +658,41 @@ class OpenCodeProvider(OpenAIProvider):
                 if resp.status == 200:
                     return True
 
-                # OpenCode can return a temporary upstream capacity error although
-                # authentication is valid. Don't block setup in that specific case.
+                error_text = await resp.text()
+
+                # Auth errors: Invalid API key
+                if resp.status in (401, 403):
+                    _LOGGER.error(
+                        "OpenCode authentication failed (invalid API key or endpoint): %s",
+                        error_text[:200],
+                    )
+                    return False
+
+                # Temporary capacity issue: Allow setup to proceed
                 if resp.status in (500, 502, 503, 504):
-                    error_text = await resp.text()
-                    if "No available accounts" in error_text:
+                    if "No available accounts" in error_text or "account" in error_text.lower():
                         _LOGGER.warning(
-                            "OpenCode temporary upstream capacity issue during key validation: %s",
+                            "OpenCode temporary capacity issue during validation (key is valid): %s",
                             error_text[:200],
                         )
                         return True
+                    # Other server errors might also be temporary
+                    _LOGGER.warning(
+                        "OpenCode server error %d during validation (may be temporary): %s",
+                        resp.status,
+                        error_text[:200],
+                    )
+                    return True
 
+                # Other status codes
+                _LOGGER.warning(
+                    "OpenCode validation returned status %d: %s",
+                    resp.status,
+                    error_text[:200],
+                )
                 return False
-        except Exception:  # pylint: disable=broad-except
+        except Exception as err:  # pylint: disable=broad-except
+            _LOGGER.error("OpenCode connection test failed: %s", err)
             return False
 
 
