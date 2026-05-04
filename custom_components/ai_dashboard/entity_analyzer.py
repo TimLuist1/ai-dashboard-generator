@@ -68,6 +68,7 @@ class EntityAnalyzer:
         if self._cache is not None and (now - self._cache_time) < self._cache_ttl:
             _LOGGER.debug("Returning cached entity analysis")
             return self._cache
+        from homeassistant.helpers import area_registry as ar
         from homeassistant.helpers import device_registry as dr
         from homeassistant.helpers import entity_registry as er
         from .const import (
@@ -80,6 +81,7 @@ class EntityAnalyzer:
             FILTER_PATTERNS,
             SENSOR_DEVICE_CLASS_ICONS,
         )
+        area_reg = ar.async_get(self.hass)
         device_reg = dr.async_get(self.hass)
         entity_reg = er.async_get(self.hass)
 
