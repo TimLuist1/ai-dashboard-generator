@@ -334,6 +334,10 @@ class AIAssistant:
             api_url = "https://api.groq.com/openai/v1/chat/completions"
         elif self.provider == AI_PROVIDER_OPENCODE:
             base = (self.base_url or OPENCODE_DEFAULT_BASE_URL).rstrip("/")
+            # Auto-append /v1 if not present so both "https://aiprimetech.io"
+            # and "https://aiprimetech.io/v1" work correctly.
+            if not base.endswith("/v1"):
+                base = f"{base}/v1"
             api_url = f"{base}/chat/completions"
 
         async with session.post(
